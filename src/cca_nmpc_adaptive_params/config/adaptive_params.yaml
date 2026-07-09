@@ -1,0 +1,18 @@
+# adaptive_params.yaml — CCA-NMPC Adaptive Parameter Node
+# Mirrors docs/07_yaml_parameters.md adaptive_param_node block (Eqs. 10.1-10.3).
+
+adaptive_param_node:
+  ros__parameters:
+    d_safe0: 0.6            # d_safe,0 in Eq. 10.1 [m]
+    k_d: 0.8               # Eq. 10.1
+    v_x0: 1.0             # nominal max forward speed [m/s]
+    v_y0: 0.8             # nominal max lateral speed [m/s]
+    omega_0: 1.2          # nominal max angular speed [rad/s]
+    k_x: 0.6
+    k_y: 0.5
+    k_omega: 0.7
+    v_x_min: 0.08          # floor, Section 10 ("frozen robot" fix)
+    v_y_min: 0.06
+    omega_min: 0.1
+    Q0_diag: [5.0, 5.0, 2.0]   # Q_0 in Eq. 10.3 (diag over [x_r, y_r, theta_r])
+    Qh_diag: [8.0, 8.0, 3.0]   # Q_h in Eq. 10.3
