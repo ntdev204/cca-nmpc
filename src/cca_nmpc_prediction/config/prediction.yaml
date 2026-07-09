@@ -1,0 +1,15 @@
+# prediction.yaml — CCA-NMPC Prediction Node
+# Mirrors docs/07_yaml_parameters.md prediction_node block (Sections 6, 13).
+
+prediction_node:
+  ros__parameters:
+    model_path: "models/lstm_predictor_v1_on_lstm_dataset_v1.onnx"
+    normalization_stats_path: "models/normalization_stats.json"
+    L: 8                        # input sequence length, Eq. 6.1
+    H: 12                       # prediction horizon length, Eq. 6.2
+    f_lstm_hz: 8.0              # f_LSTM, Section 13.1 (< f_NMPC=20Hz)
+    uncertainty_window_W: 20    # W in Eq. 6.3
+    sigma_growth_rate_beta: 0.05  # beta in Eq. 13.3
+    # sigma_max MUST equal context_node.sigma_max (shared ceiling, Eq. 8.3/13.3)
+    sigma_max: 0.5
+    max_track_age_sec: 1.0
