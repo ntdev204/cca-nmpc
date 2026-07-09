@@ -23,6 +23,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AdaptiveParams.msg"
   "msg/NmpcDiagnostics.msg"
   "msg/SlackValue.msg"
+  "msg/HumanSafetyDistance.msg"
   DEPENDENCIES builtin_interfaces std_msgs
 )
 

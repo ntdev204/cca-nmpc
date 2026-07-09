@@ -1,0 +1,37 @@
+# human_perception.yaml — CCA-NMPC Human Perception Node Parameters
+# Matches docs/07_yaml_parameters.md perception_node block
+
+perception_node:
+  ros__parameters:
+    # YOLO TensorRT detector
+    yolo_engine_path: "models/yolo26m_human.engine"  # TensorRT serialized engine (built per target GPU)
+    detection_confidence_threshold: 0.4              # minimum confidence to accept a raw detection
+
+    # Tracking
+    max_track_age_sec: 1.0                           # drop a track if unseen this long
+    association_distance_gate: 2.0                   # max [m] distance for nearest-neighbor track association
+
+    # Kalman filter (constant-velocity model)
+    kalman:
+      process_noise_std: 0.1                         # Q process noise
+      measurement_noise_std: 0.15                    # R measurement noise
+
+    # Camera topics — defaults match Astra driver (astra.launch.xml), namespaced under /camera
+    rgb_image_topic: "/camera/color/image_raw"
+    depth_image_topic: "/camera/depth/image_raw"     # or aligned depth-to-color topic
+    camera_info_topic: "/camera/color/camera_info"
+
+    # QoS — sensor topics use best-effort SensorDataQoS to match Astra publisher (color_qos/depth_qos: "default")
+    sensor_qos: "sensor_data"                        # one of: sensor_data | reliable
+
+    # Depth projection
+    depth_sampling_radius: 5                         # [pixels] median depth sampling radius around box center
+
+    # Frames — project into OPTICAL frame from CameraInfo.header.frame_id, NOT camera_link
+    # camera_link is not axis-aligned with optical frame; pinhole projection must use optical frame
+    camera_optical_frame: "camera_color_optical_frame"  # overridden by incoming CameraInfo/image header.frame_id at runtime
+    map_frame: "map"
+
+    # Depth alignment requirement — Astra driver defaults to depth_registration:=false
+    # Either launch with depth_registration:=true (hardware D2C) or subscribe to aligned depth-to-color topic
+    require_depth_alignment: true

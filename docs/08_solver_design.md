@@ -277,7 +277,7 @@ else:
 
 - Simply "publish previous control" is only safe for a bounded number of consecutive failures (`timeout_hold_cycles`, a new YAML parameter to add to `nmpc_controller_node`); repeated failures should escalate to a safe stop rather than letting the robot coast indefinitely on stale commands, since a human's position may have changed materially in the meantime.
 - Safe stop should decelerate within actuator limits rather than commanding an instantaneous zero velocity if the robot is moving at speed, to avoid a different hazard (an abrupt stop being unpredictable/startling to a nearby human, echoing the smoothness motivation for $J_{smooth}$ in Section 7).
-- Every fallback activation is logged (extends `NmpcDiagnostics.msg` with a `fallback_triggered` flag and `fallback_reason` field) so fallback frequency becomes another number the paper can report directly, the same way slack activation frequency is reported (Section 8) — a low fallback rate is itself evidence supporting the real-time claim.
+- Every fallback activation is logged (`NmpcDiagnostics.msg` carries `fallback_triggered` flag, `fallback_code` (FALLBACK_* enum), and optional `fallback_reason` string) so fallback frequency becomes another number the paper can report directly, the same way slack activation frequency is reported (Section 8) — a low fallback rate is itself evidence supporting the real-time claim.
 
 ---
 
@@ -308,7 +308,7 @@ Splitting the budget this way turns "is it real-time?" from a single pass/fail n
 
 ## 11. Solver Diagnostics (debug-only, not for the paper)
 
-Separate from the paper-facing `NmpcDiagnostics.msg` fields (solver_success, solve_time_ms, slack_values, cost breakdown, fallback fields — Section 9 — already defined/extended above), the solver module additionally exposes a lower-level diagnostics bundle intended purely for development/debugging, not for inclusion in results:
+Separate from the paper-facing `NmpcDiagnostics.msg` fields (solver_success, solve_time_ms, `slacks` (`SlackValue[]`), cost breakdown, fallback fields — Section 9 — already defined/extended above), the solver module additionally exposes a lower-level diagnostics bundle intended purely for development/debugging, not for inclusion in results:
 
 ```
 SolverDiagnostics:
@@ -369,7 +369,7 @@ Raw Nav2 costmaps are not differentiable (piecewise-constant occupancy grids, or
 
 ## 15. Remaining Open Design Questions
 
-1. **Where is `d_safe(phi_j)` computed — inside the solver's parameter-setting code, or upstream in `adaptive_param_node`?** Current design in `02_system_architecture.md` has `adaptive_param_node` own Eqs. 10.1–10.3, meaning the solver receives already-computed `d_safe` values as parameters rather than `phi_j` directly. This is preferred (keeps the solver backend-agnostic and "dumb," easier to unit-test) but should be confirmed before implementing `set_adaptive_params`.
+1. **RESOLVED — `d_safe(phi_j)` is computed upstream in `adaptive_param_node`, not in the solver.** `adaptive_param_node` owns Eqs. 10.1–10.3 and publishes per-human values in `AdaptiveParams.d_safe_per_human` (a `HumanSafetyDistance[]`, matched by `track_id`), added to `06_message_definitions.md`. The solver's `set_adaptive_params` reads these precomputed `d_safe` values directly and does not recompute them from `phi_j`. This keeps the solver backend-agnostic and "dumb," and independently unit-testable. Consequence for `set_adaptive_params`: bind each active human's constraint bound from `d_safe_per_human` by `track_id`, and fill unused solver slots with the dummy-human convention (item 2 below).
 2. **Dummy-human placeholder convention** (Section 3.3) needs a documented constant (e.g. `d_j = 999.0`, `phi_j = 0.0`) so unused constraint slots don't accidentally get logged as a real near-miss in diagnostics.
 3. **CasADi/acados parity testing**: before trusting the acados deployment, both backends should be run on identical logged scenarios and their trajectories, costs, and `SolverDiagnostics` compared numerically, to catch formulation drift introduced during implementation (e.g. a slack penalty accidentally doubled, a sign flipped in an External Cost term). This is the primary justification for keeping the CasADi backend alive post-prototyping (Section 2) rather than deleting it once acados is working.
 4. **`timeout_hold_cycles` value** (Section 9) needs to be chosen and justified — likely a small number of cycles (e.g. 2–3 at 20 Hz, i.e. ~100–150 ms) but should be tied to how fast a nearby human can materially change position, not chosen arbitrarily.

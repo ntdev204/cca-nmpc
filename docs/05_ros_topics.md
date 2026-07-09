@@ -8,9 +8,12 @@ All topics use `cca_nmpc_msgs` custom message types unless a standard ROS2 type 
 
 | Topic | Message Type | Publisher | Subscriber(s) | QoS | Rate |
 |---|---|---|---|---|---|
-| `/camera/rgb/image_raw` | `sensor_msgs/Image` | camera driver | `perception_node` | SensorDataQoS | camera FPS |
-| `/camera/depth/image_raw` | `sensor_msgs/Image` | camera driver | `perception_node` | SensorDataQoS | camera FPS |
+| `/camera/color/image_raw` | `sensor_msgs/Image` | Astra camera driver | `perception_node` | SensorDataQoS | camera FPS |
+| `/camera/depth/image_raw` | `sensor_msgs/Image` | Astra camera driver | `perception_node` | SensorDataQoS | camera FPS |
+| `/camera/color/camera_info` | `sensor_msgs/CameraInfo` | Astra camera driver | `perception_node` | SensorDataQoS | camera FPS |
 | `/human_states` | `cca_nmpc_msgs/HumanStateArray` | `perception_node` | `prediction_node`, `context_node` | Reliable, KeepLast(10) | $f_{perception}$ |
+
+> **Camera topics follow the Astra driver** (`src/depend/astra_camera_ros2`, `astra.launch.xml`), namespaced under `/camera`, matching `perception_node` defaults in `07_yaml_parameters.md`. Do **not** use the legacy `/camera/rgb/image_raw` name. Depth must be aligned to color (launch with `depth_registration:=true` or subscribe to an aligned depth-to-color topic); pinhole projection uses the optical frame from `CameraInfo.header.frame_id`, not `camera_link`.
 
 ## 2. Prediction
 

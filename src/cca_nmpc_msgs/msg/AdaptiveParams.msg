@@ -5,5 +5,6 @@ float64 d_safe_aggregate     # for monitoring/diagnostics only; per-human d_safe
 float64 vx_max               # Eq. 10.2
 float64 vy_max               # Eq. 10.2
 float64 omega_max            # Eq. 10.2
-float64[3] Q_diag            # diagonal of Q(phi), Eq. 10.3 — state [x_r, y_r, theta_r]
+float64[3] q_diag            # diagonal of Q(phi), Eq. 10.3 — state [x_r, y_r, theta_r]
 float64 phi_aggregate_used   # phi value this parameter set was generated from
+HumanSafetyDistance[] d_safe_per_human  # per-human d_safe(phi_j), Eq. 10.1 — solver uses these for per-human constraints (Eq. 12.3); matched by track_id, NOT array index

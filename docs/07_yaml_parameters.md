@@ -85,6 +85,11 @@ nmpc_controller_node:
     w_slack: 50.0 # slack penalty, Eq. 12.5
     C_collision: 0.9 # obstacle-cost collision threshold, Eq. 12.4
     max_humans_in_solver: 6 # cap on per-human constraints (Eq. 12.3) for real-time solve bound
+    # Real-time fallback / warm-start invalidation (Solver Design doc, Sections 5.2, 9)
+    timeout_hold_cycles: 3 # max consecutive failed/late solves to hold previous control before safe-stop (Section 9)
+    odom_jump_pos_thresh_m: 0.30 # position discontinuity between consecutive /odom beyond this -> reset() (Section 5.2)
+    odom_jump_yaw_thresh_rad: 0.35 # heading discontinuity beyond this -> reset() (Section 5.2)
+    safe_stop_decel_limit: 1.0 # max deceleration [m/s^2] for the safe-stop ramp (Section 9)
 
 calibration:
   ros__parameters:
