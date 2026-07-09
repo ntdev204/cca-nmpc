@@ -1,0 +1,24 @@
+# nmpc.yaml — CCA-NMPC Controller Node
+# Mirrors docs/07_yaml_parameters.md nmpc_controller_node block.
+# NOTE: solver_backend defaults to "casadi" here (Windows/reference). Switch to
+# "acados" on the target platform once the acados backend is built.
+
+nmpc_controller_node:
+  ros__parameters:
+    solver_backend: "casadi"     # "acados" on target; "casadi" reference
+    horizon_N: 20
+    dt: 0.05                     # control period [s] -> f_NMPC = 20 Hz
+    R_diag: [0.1, 0.1, 0.05]     # control effort weight, Eq. 11.2
+    Rd_diag: [0.05, 0.05, 0.02]  # control smoothness weight, Eq. 11.2
+    w_h: 3.0                     # human-avoidance weight, Eq. 11.2
+    w_obstacle: 2.0              # obstacle-cost weight, Eq. 11.2
+    P_diag: [10.0, 10.0, 4.0]    # terminal cost weight, Eq. 11.2
+    w_slack: 50.0                # slack penalty, Eq. 12.5
+    C_collision: 0.9             # obstacle-cost collision threshold, Eq. 12.4
+    d0: 3.0                      # influence radius for J_human hinge, Eq. 11.2
+    max_humans_in_solver: 6      # fixed per-human constraint slots (Eq. 12.3)
+    # Real-time fallback / warm-start invalidation (Solver Design 5.2, 9)
+    timeout_hold_cycles: 3
+    odom_jump_pos_thresh_m: 0.30
+    odom_jump_yaw_thresh_rad: 0.35
+    safe_stop_decel_limit: 1.0   # max decel [m/s^2] for the safe-stop ramp
