@@ -1,0 +1,23 @@
+# context.yaml — CCA-NMPC Context Node Parameters
+# Mirrors docs/07_yaml_parameters.md context_node block.
+# Weights are CALIBRATED outputs (Section 8.1) — do not hand-edit without
+# re-running the calibration procedure (tools/context_calibration).
+
+context_node:
+  ros__parameters:
+    d0: 3.0                 # d_0 in Eq. 8.2 [m]
+    v_max_ref: 1.5          # v_max normalizer in Eq. 8.2 [m/s]
+    epsilon: 1.0e-3         # epsilon in Eqs. 7.4, 7.5
+    sigma_max: 0.5          # sigma_max in Eq. 8.3 (shared with prediction_node)
+    weights:
+      w_d: 1.2
+      w_v: 0.8
+      w_theta: 0.6
+      w_u: 1.0
+      b: -0.5
+    ema_filter:
+      alpha: 0.7            # Eq. 12.6 EMA smoothing factor -> phi_j_filtered
+    dwell_time:
+      T_dwell_cycles: 4     # Eq. 12.7 minimum cycles between phi_j_used updates
+    fallback_phi_on_dropout: 1.0   # conservative default (Architecture Section 4)
+    input_timeout_sec: 0.5         # dropout if no fresh states/predictions within this
