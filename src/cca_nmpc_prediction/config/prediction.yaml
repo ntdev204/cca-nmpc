@@ -3,7 +3,10 @@
 
 prediction_node:
   ros__parameters:
-    model_path: "models/lstm_predictor_v1_on_lstm_dataset_v1.onnx"
+    # TensorRT serialized engine, built per target GPU from the ONNX export
+    # (tools/lstm_training/export.py -> build_engine.py). ONNX is NOT loaded at
+    # runtime; the .engine is the runtime artifact (like the YOLO detector).
+    engine_path: "models/lstm_predictor_v1_on_lstm_dataset_v1.engine"
     normalization_stats_path: "models/normalization_stats.json"
     L: 8                        # input sequence length, Eq. 6.1
     H: 12                       # prediction horizon length, Eq. 6.2
@@ -13,3 +16,6 @@ prediction_node:
     # sigma_max MUST equal context_node.sigma_max (shared ceiling, Eq. 8.3/13.3)
     sigma_max: 0.5
     max_track_age_sec: 1.0
+    # Set true for non-GPU dev / smoke tests: uses a constant-velocity mock and
+    # skips TensorRT engine loading.
+    use_mock_predictor: false

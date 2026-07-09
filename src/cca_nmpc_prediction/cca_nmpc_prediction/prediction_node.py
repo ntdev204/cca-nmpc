@@ -25,7 +25,7 @@ from cca_nmpc_msgs.msg import (
 )
 
 from .track_buffer import TrackBufferManager
-from .lstm_infer import LSTMPredictor
+from .lstm_infer import TensorRtLSTMPredictor, MockLSTMPredictor
 from .uncertainty import UncertaintyEstimator
 
 
@@ -37,7 +37,7 @@ class PredictionNode(Node):
         self._buffers = TrackBufferManager(self._L, self._max_age)
         self._uncertainty = UncertaintyEstimator(
             self._W, self._beta, self._sigma_max)
-        self._predictor = LSTMPredictor(self._model_path, self._stats_path)
+        self._predictor = self._build_predictor()
         # last one-step-ahead prediction per track, for Eq. 6.3 error
         self._last_pred1: dict[int, np.ndarray] = {}
 
@@ -52,15 +52,18 @@ class PredictionNode(Node):
 
     def _load_params(self) -> None:
         d = self.declare_parameter
-        d('model_path', 'models/lstm_predictor_v1_on_lstm_dataset_v1.onnx')
+        # TensorRT serialized engine (built per target GPU from the ONNX export).
+        d('engine_path', 'models/lstm_predictor_v1_on_lstm_dataset_v1.engine')
         d('normalization_stats_path', 'models/normalization_stats.json')
         d('L', 8); d('H', 12); d('f_lstm_hz', 8.0)
         d('uncertainty_window_W', 20)
         d('sigma_growth_rate_beta', 0.05)
         d('sigma_max', 0.5)
         d('max_track_age_sec', 1.0)
+        # Mock predictor for non-GPU dev / smoke tests (skips engine load).
+        d('use_mock_predictor', False)
         g = self.get_parameter
-        self._model_path = g('model_path').value
+        self._engine_path = g('engine_path').value
         self._stats_path = g('normalization_stats_path').value
         self._L = int(g('L').value)
         self._H = int(g('H').value)
@@ -69,6 +72,23 @@ class PredictionNode(Node):
         self._beta = float(g('sigma_growth_rate_beta').value)
         self._sigma_max = float(g('sigma_max').value)
         self._max_age = float(g('max_track_age_sec').value)
+        self._use_mock = bool(g('use_mock_predictor').value)
+
+    def _build_predictor(self):
+        """TensorRT predictor with MockLSTMPredictor fallback (non-GPU dev)."""
+        dt = 1.0 / self._f_lstm
+        if self._use_mock:
+            self.get_logger().warn('use_mock_predictor=true, using MockLSTMPredictor')
+            return MockLSTMPredictor(horizon=self._H, dt=dt)
+        try:
+            predictor = TensorRtLSTMPredictor(
+                self._engine_path, self._stats_path, horizon=self._H)
+            self.get_logger().info('Using TensorRtLSTMPredictor')
+            return predictor
+        except (ImportError, FileNotFoundError, RuntimeError) as e:
+            self.get_logger().warn(
+                f'TRT predictor unavailable ({e}), using MockLSTMPredictor')
+            return MockLSTMPredictor(horizon=self._H, dt=dt)
 
     def _on_states(self, msg: HumanStateArray) -> None:
         t = self.get_clock().now().nanoseconds / 1e9

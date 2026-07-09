@@ -1,70 +1,82 @@
-"""Tests for ONNX inference wrapper (Section 3.2).
+"""Tests for TensorRT LSTM inference wrapper + normalization (Section 3.2).
 
-Exports a tiny real ONNX model via tools.lstm_training so the wrapper is tested
-against the exact signature the training package produces.
+Runtime inference uses a TensorRT .engine (GPU-only), so the GPU path is not
+exercised on Windows. These tests cover the ROS-free pieces: frozen-stat
+normalization round-trip, the deterministic MockLSTMPredictor, and that the
+TensorRT adapter fails clearly without a valid engine.
 """
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-# tools/ is at repo root; make it importable when running from the package dir.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+from cca_nmpc_prediction.lstm_infer import (
+    load_normalization,
+    normalize_window,
+    denormalize,
+    MockLSTMPredictor,
+    TensorRtLSTMPredictor,
+)
 
 
-def _export_tiny_model(tmp_path, L=8, H=12):
-    from tools.lstm_training.model import LSTMPredictor, LSTMConfig
-    from tools.lstm_training.export import export_onnx
-
-    model = LSTMPredictor(LSTMConfig(hidden_size=8, horizon=H))
-    stats = {"mean": [0.0] * 4, "std": [1.0] * 4,
-             "channels": ["x", "y", "vx", "vy"]}
-    # Keep the source stats in a separate dir so export_onnx's copy into the
-    # model dir does not collide with the source (SameFileError).
-    src_dir = tmp_path / "src"
-    model_dir = tmp_path / "model"
-    src_dir.mkdir()
-    model_dir.mkdir()
-    stats_path = src_dir / "normalization_stats.json"
-    stats_path.write_text(json.dumps(stats))
-    onnx_path = export_onnx(model, model_dir / "m.onnx", L=L, stats_path=stats_path)
-    return onnx_path, stats_path
+def _write_stats(tmp_path, mean, std):
+    p = tmp_path / "normalization_stats.json"
+    p.write_text(json.dumps({"mean": mean, "std": std,
+                             "channels": ["x", "y", "vx", "vy"]}))
+    return p
 
 
-def test_predict_shape(tmp_path):
-    onnx_path, stats_path = _export_tiny_model(tmp_path)
-    from cca_nmpc_prediction.lstm_infer import LSTMPredictor as OnnxPredictor
-    pred = OnnxPredictor(onnx_path, stats_path)
-    out = pred.predict(np.random.randn(8, 4).astype(np.float32))
+def test_normalization_roundtrip(tmp_path):
+    stats = _write_stats(tmp_path, [1.0, 2.0, 0.0, 0.0], [2.0, 3.0, 1.0, 1.0])
+    mean, std = load_normalization(stats)
+    w = np.random.randn(8, 4).astype(np.float32)
+    norm = normalize_window(w, mean, std)
+    recovered = denormalize(norm, mean, std)
+    assert np.allclose(recovered, w, atol=1e-5)
+
+
+def test_load_stats_rejects_wrong_channels(tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"mean": [0, 0], "std": [1, 1], "channels": []}))
+    with pytest.raises(ValueError):
+        load_normalization(p)
+
+
+def test_zero_std_guarded(tmp_path):
+    stats = _write_stats(tmp_path, [0.0] * 4, [0.0, 1.0, 1.0, 1.0])
+    _mean, std = load_normalization(stats)
+    assert std[0] == 1.0  # zero std replaced by 1.0
+
+
+def test_mock_constant_velocity_extrapolation():
+    pred = MockLSTMPredictor(horizon=12, dt=0.1)
+    # last state x=1, y=2, vx=0.5, vy=-0.5
+    window = np.zeros((8, 4), dtype=np.float32)
+    window[-1] = [1.0, 2.0, 0.5, -0.5]
+    out = pred.predict(window)
     assert out.shape == (12, 4)
+    # step 1: x = 1 + 0.5*0.1 = 1.05, y = 2 - 0.5*0.1 = 1.95
+    assert abs(out[0, 0] - 1.05) < 1e-6
+    assert abs(out[0, 1] - 1.95) < 1e-6
+    # velocity is held constant
+    assert abs(out[-1, 2] - 0.5) < 1e-6
 
 
-def test_normalization_roundtrip_identity_stats(tmp_path):
-    # with mean=0,std=1 the wrapper's norm/denorm are identities, so the ONNX
-    # output equals the raw model output on the same input.
-    onnx_path, stats_path = _export_tiny_model(tmp_path)
-    from cca_nmpc_prediction.lstm_infer import LSTMPredictor as OnnxPredictor
-    pred = OnnxPredictor(onnx_path, stats_path)
-    x = np.zeros((8, 4), dtype=np.float32)
-    out = pred.predict(x)
-    assert np.all(np.isfinite(out))
-
-
-def test_missing_model_raises(tmp_path):
-    from cca_nmpc_prediction.lstm_infer import LSTMPredictor as OnnxPredictor
-    stats = tmp_path / "s.json"
-    stats.write_text(json.dumps({"mean": [0]*4, "std": [1]*4, "channels": []}))
-    with pytest.raises(FileNotFoundError):
-        OnnxPredictor(tmp_path / "nope.onnx", stats)
-
-
-def test_rejects_bad_window_shape(tmp_path):
-    onnx_path, stats_path = _export_tiny_model(tmp_path)
-    from cca_nmpc_prediction.lstm_infer import LSTMPredictor as OnnxPredictor
-    pred = OnnxPredictor(onnx_path, stats_path)
+def test_mock_rejects_bad_window():
+    pred = MockLSTMPredictor()
     with pytest.raises(ValueError):
         pred.predict(np.zeros((8, 3), dtype=np.float32))
+
+
+def test_normalize_rejects_bad_window(tmp_path):
+    stats = _write_stats(tmp_path, [0.0] * 4, [1.0] * 4)
+    mean, std = load_normalization(stats)
+    with pytest.raises(ValueError):
+        normalize_window(np.zeros((8, 3)), mean, std)
+
+
+def test_tensorrt_missing_engine_raises(tmp_path):
+    stats = _write_stats(tmp_path, [0.0] * 4, [1.0] * 4)
+    with pytest.raises(FileNotFoundError):
+        TensorRtLSTMPredictor(tmp_path / "nope.engine", stats)
