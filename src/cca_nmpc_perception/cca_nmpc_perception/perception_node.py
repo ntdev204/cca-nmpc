@@ -84,6 +84,7 @@ class PerceptionNode(Node):
         self.declare_parameter('camera_optical_frame', 'camera_color_optical_frame')
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('require_depth_alignment', True)
+        self.declare_parameter('use_mock_detector', False)
 
         self.yolo_engine_path = self.get_parameter('yolo_engine_path').value
         self.detection_confidence_threshold = self.get_parameter('detection_confidence_threshold').value
@@ -99,15 +100,21 @@ class PerceptionNode(Node):
         self.camera_optical_frame = self.get_parameter('camera_optical_frame').value
         self.map_frame = self.get_parameter('map_frame').value
         self.require_depth_alignment = self.get_parameter('require_depth_alignment').value
+        self.use_mock_detector = self.get_parameter('use_mock_detector').value
 
     def _validate_params(self) -> None:
-        engine_path = Path(self.yolo_engine_path)
-        if not engine_path.exists():
-            self.get_logger().error(f'YOLO engine not found: {self.yolo_engine_path}')
-            raise FileNotFoundError(f'Missing YOLO engine: {self.yolo_engine_path}')
-        if not engine_path.is_file():
-            self.get_logger().error(f'YOLO engine is not a file: {self.yolo_engine_path}')
-            raise ValueError(f'YOLO engine must be a file: {self.yolo_engine_path}')
+        # In mock mode (smoke tests / non-GPU dev) the TensorRT engine is not
+        # required, so skip ONLY the engine-file validation. Depth-alignment
+        # still matters: the mock pipeline projects detections using the depth
+        # image, so an unaligned depth topic would still yield wrong positions.
+        if not self.use_mock_detector:
+            engine_path = Path(self.yolo_engine_path)
+            if not engine_path.exists():
+                self.get_logger().error(f'YOLO engine not found: {self.yolo_engine_path}')
+                raise FileNotFoundError(f'Missing YOLO engine: {self.yolo_engine_path}')
+            if not engine_path.is_file():
+                self.get_logger().error(f'YOLO engine is not a file: {self.yolo_engine_path}')
+                raise ValueError(f'YOLO engine must be a file: {self.yolo_engine_path}')
 
         if self.require_depth_alignment:
             depth_lower = self.depth_image_topic.lower()
@@ -120,6 +127,9 @@ class PerceptionNode(Node):
 
     def _build_detector(self):
         """Attempt TensorRT detector; fall back to MockDetector if TRT unavailable."""
+        if self.use_mock_detector:
+            self.get_logger().warn('use_mock_detector=true, using MockDetector')
+            return MockDetector()
         try:
             from .detector import TensorRtYoloDetector
             detector = TensorRtYoloDetector(
@@ -158,7 +168,7 @@ class PerceptionNode(Node):
         # Project to 3D in optical frame, then transform to map
         stamp = rgb_msg.header.stamp
         ros_time = rclpy.time.Time.from_msg(stamp)
-        measurements: list[tuple[float, float]] = []
+        measurements: list[tuple[float, float, float]] = []
 
         for det in raw_detections:
             if det.confidence < self.detection_confidence_threshold:
@@ -186,7 +196,9 @@ class PerceptionNode(Node):
             if point_map is None:
                 continue
 
-            measurements.append((point_map.point.x, point_map.point.y))
+            measurements.append(
+                (point_map.point.x, point_map.point.y, det.confidence)
+            )
 
         t_project = time.monotonic()
 
@@ -203,14 +215,15 @@ class PerceptionNode(Node):
 
         for track in active_tracks:
             state = HumanState()
-            state.id = track.track_id
-            state.pose.position.x = track.position[0]
-            state.pose.position.y = track.position[1]
-            state.pose.position.z = 0.0
-            state.velocity.linear.x = track.velocity[0]
-            state.velocity.linear.y = track.velocity[1]
-            state.velocity.linear.z = 0.0
-            msg.states.append(state)
+            state.header.stamp = stamp
+            state.header.frame_id = self.map_frame
+            state.track_id = track.track_id
+            state.x = track.position[0]
+            state.y = track.position[1]
+            state.vx = track.velocity[0]
+            state.vy = track.velocity[1]
+            state.confidence = track.confidence
+            msg.humans.append(state)
 
         self._pub.publish(msg)
         t_publish = time.monotonic()

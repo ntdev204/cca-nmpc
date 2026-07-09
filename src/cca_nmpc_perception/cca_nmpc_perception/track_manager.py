@@ -11,6 +11,7 @@ class Track:
     """Track with persistent ID and Kalman state."""
     track_id: int
     kalman: KalmanTrack
+    confidence: float = 1.0
 
     @property
     def position(self) -> tuple[float, float]:
@@ -47,18 +48,24 @@ class TrackManager:
 
     def update(
         self,
-        measurements: Sequence[tuple[float, float]],
+        measurements: Sequence[tuple[float, ...]],
         current_time: float
     ) -> list[Track]:
         """Update tracks with new measurements.
 
         Args:
-            measurements: List of (x, y) measurements in map frame
+            measurements: List of ``(x, y)`` or ``(x, y, confidence)`` tuples in
+                the map frame. A missing confidence defaults to 1.0.
             current_time: Current timestamp in seconds
 
         Returns:
             List of all active tracks after update
         """
+        positions = [(float(m[0]), float(m[1])) for m in measurements]
+        confidences = [
+            float(m[2]) if len(m) > 2 else 1.0 for m in measurements
+        ]
+
         # Predict all tracks to current time
         for track in self._tracks:
             dt = current_time - track.kalman.last_update_time
@@ -66,26 +73,27 @@ class TrackManager:
                 track.kalman = predict(track.kalman, dt, self._Q)
 
         # Associate measurements to tracks
-        if measurements and self._tracks:
-            associations = self._nearest_neighbor_associate(measurements)
+        if positions and self._tracks:
+            associations = self._nearest_neighbor_associate(positions)
         else:
             associations = {}
 
         # Update associated tracks
-        updated_track_ids = set()
         for meas_idx, track_idx in associations.items():
             track = self._tracks[track_idx]
-            measurement = np.array(measurements[meas_idx], dtype=float)
+            measurement = np.array(positions[meas_idx], dtype=float)
             track.kalman = update(
                 track.kalman, measurement, self._H, self._R, current_time
             )
-            updated_track_ids.add(track_idx)
+            track.confidence = confidences[meas_idx]
 
         # Create new tracks for unassociated measurements
         associated_meas = set(associations.keys())
-        for meas_idx, (x, y) in enumerate(measurements):
+        for meas_idx, (x, y) in enumerate(positions):
             if meas_idx not in associated_meas:
-                new_track = self._create_track(x, y, current_time)
+                new_track = self._create_track(
+                    x, y, current_time, confidences[meas_idx]
+                )
                 self._tracks.append(new_track)
 
         # Prune stale tracks
@@ -125,7 +133,7 @@ class TrackManager:
         return associations
 
     def _create_track(
-        self, x: float, y: float, timestamp: float
+        self, x: float, y: float, timestamp: float, confidence: float = 1.0
     ) -> Track:
         """Initialize new track at measurement position with zero velocity."""
         kalman = KalmanTrack(
@@ -133,7 +141,9 @@ class TrackManager:
             covariance=np.eye(4),
             last_update_time=timestamp
         )
-        track = Track(track_id=self._next_track_id, kalman=kalman)
+        track = Track(
+            track_id=self._next_track_id, kalman=kalman, confidence=confidence
+        )
         self._next_track_id += 1
         return track
 
