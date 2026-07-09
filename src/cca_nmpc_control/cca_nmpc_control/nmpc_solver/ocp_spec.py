@@ -71,11 +71,11 @@ def build_rk4_integrator(dt: float) -> ca.Function:
 
     ode = {"x": x, "p": u, "ode": mecanum_dynamics(x, u)}
     opts = {
-        "tf": dt,
         "simplify": True,
         "number_of_finite_elements": 4,
     }
-    integrator = ca.integrator("integrator", "rk", ode, opts)
+    # Non-deprecated signature: t0 and tf as positional args (t0=0, tf=dt).
+    integrator = ca.integrator("integrator", "rk", ode, 0.0, dt, opts)
 
     # Wrap into a cleaner (x, u) -> x_next Function
     x_next = integrator(x0=x, p=u)["xf"]
