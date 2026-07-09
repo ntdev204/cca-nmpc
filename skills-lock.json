@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "creating-mermaid-diagrams": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/mermaid/skills/mermaid-skill/SKILL.md",
+      "computedHash": "1e271fadbcb9b8c39803b438f5105c30a7d3c296d873081c1ad39db93b31b5ac"
+    },
+    "drawio-skill": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/drawio/skills/drawio-skill/SKILL.md",
+      "computedHash": "bbd22cc2d3d2f90f209dbb56bc462f3fdc3515ad93580043a40d7eeaf66d3b88"
+    },
+    "excalidraw": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/excalidraw/skills/excalidraw-skill/SKILL.md",
+      "computedHash": "0a12ba457db429f18b636a8b769502370652e08ce7c38ab662386bb50700328c"
+    },
+    "plantuml-skill": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/plantuml/skills/plantuml-skill/SKILL.md",
+      "computedHash": "a61055a646debc600acf3d691c3487d87f8c8a6a5e386cd7169d0e6567a7def6"
+    },
+    "semanticscholar-skill": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/semanticscholar/skills/semanticscholar-skill/SKILL.md",
+      "computedHash": "e498eed4f85b2841436ed8aaffa5232ba64710e9513035a44e58b7d9931ec0f4"
+    },
+    "tldraw-skill": {
+      "source": "Agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tldraw/skills/tldraw-skill/SKILL.md",
+      "computedHash": "0343201312cf9962d115c3d1069cd7e00edbe6750c10965aa32418378e543908"
+    }
+  }
+}

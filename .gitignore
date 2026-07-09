@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+build/
+install/
+log/
+
+.vscode/
+.idea/
+
+.agents/
+.claude/
