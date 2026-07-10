@@ -70,7 +70,7 @@ class TrackManager:
         for track in self._tracks:
             dt = current_time - track.kalman.last_update_time
             if dt > 0:
-                track.kalman = predict(track.kalman, dt, self._Q)
+                track.kalman = predict(track.kalman, dt, self._Q, current_time)
 
         # Associate measurements to tracks
         if positions and self._tracks:
