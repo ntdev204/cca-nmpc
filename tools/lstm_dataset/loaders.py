@@ -2,30 +2,33 @@
 
 Rosbag2 support is behind an import guard (DS-07): if the rosbags
 library is not installed this module still imports cleanly.
+Trajectory key is composite (session_id, sequence_id, track_id) to
+prevent cross-session ID collision (P1 #7).
 """
 
 from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import pandas as pd
 
-from .schema import REQUIRED_COLUMNS, TrajectoryRecord
+from .schema import REQUIRED_COLUMNS, TrajectoryKey, TrajectoryRecord
 
 
-def load_csv(path: str | Path) -> Dict[int, List[TrajectoryRecord]]:
+def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
     """Load trajectory records from a CSV file.
 
-    The CSV must have at minimum the columns listed in REQUIRED_COLUMNS.
-    Records are grouped by track_id and sorted by timestamp.
+    The CSV must have at minimum the columns listed in REQUIRED_COLUMNS,
+    including session_id and sequence_id. Records are grouped by composite
+    key (session_id, sequence_id, track_id) and sorted by timestamp.
 
     Args:
         path: Path to the CSV file.
 
     Returns:
-        Dict mapping track_id -> list of TrajectoryRecord sorted by timestamp.
+        Dict mapping (session_id, sequence_id, track_id) -> sorted records.
 
     Raises:
         FileNotFoundError: If the path does not exist.
@@ -38,9 +41,11 @@ def load_csv(path: str | Path) -> Dict[int, List[TrajectoryRecord]]:
     df = pd.read_csv(path)
     _validate_csv_columns(df, path)
 
-    tracks: Dict[int, List[TrajectoryRecord]] = {}
+    tracks: Dict[TrajectoryKey, List[TrajectoryRecord]] = {}
     for _, row in df.iterrows():
         record = TrajectoryRecord(
+            session_id=str(row["session_id"]),
+            sequence_id=int(row["sequence_id"]),
             timestamp=float(row["timestamp"]),
             track_id=int(row["track_id"]),
             x=float(row["x"]),
@@ -49,10 +54,11 @@ def load_csv(path: str | Path) -> Dict[int, List[TrajectoryRecord]]:
             vy=float(row["vy"]),
             c=float(row["c"]),
         )
-        tracks.setdefault(record.track_id, []).append(record)
+        key = record.trajectory_key()
+        tracks.setdefault(key, []).append(record)
 
-    # Sort each track by timestamp
-    return {tid: sorted(recs, key=lambda r: r.timestamp) for tid, recs in tracks.items()}
+    # Sort each trajectory by timestamp
+    return {key: sorted(recs, key=lambda r: r.timestamp) for key, recs in tracks.items()}
 
 
 def _validate_csv_columns(df: pd.DataFrame, path: Path) -> None:
@@ -80,7 +86,12 @@ def _rosbag_available() -> bool:
         return False
 
 
-def load_rosbag(path: str | Path, topic: str = "/human_states") -> Dict[int, List[TrajectoryRecord]]:
+def load_rosbag(
+    path: str | Path,
+    topic: str = "/human_states",
+    session_id: str = "default",
+    sequence_id: int = 0,
+) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
     """Load trajectory records from a rosbag2 (.db3) file.
 
     Requires the `rosbags` library to be installed. Raises ImportError
@@ -89,9 +100,11 @@ def load_rosbag(path: str | Path, topic: str = "/human_states") -> Dict[int, Lis
     Args:
         path: Path to rosbag2 directory or .db3 file.
         topic: ROS2 topic name containing human state messages.
+        session_id: Recording session identifier (default "default").
+        sequence_id: Sequence within session (default 0).
 
     Returns:
-        Dict mapping track_id -> list of TrajectoryRecord sorted by timestamp.
+        Dict mapping (session_id, sequence_id, track_id) -> sorted records.
 
     Raises:
         ImportError: If the rosbags library is not installed.
@@ -107,17 +120,24 @@ def load_rosbag(path: str | Path, topic: str = "/human_states") -> Dict[int, Lis
     from rosbags.serde import deserialize_cdr  # type: ignore
 
     path = Path(path)
-    tracks: Dict[int, List[TrajectoryRecord]] = {}
+    tracks: Dict[TrajectoryKey, List[TrajectoryRecord]] = {}
 
     with Reader(path) as reader:
         for connection, timestamp_ns, rawdata in reader.messages():
             if connection.topic != topic:
                 continue
             msg = deserialize_cdr(rawdata, connection.msgtype)
-            timestamp_s = timestamp_ns / 1e9
-            # Assumes HumanStates message with a 'states' array
-            for state in msg.states:
+            # P1 #7: use msg.header.stamp, not bag write time
+            if hasattr(msg, 'header') and hasattr(msg.header, 'stamp'):
+                timestamp_s = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
+            else:
+                timestamp_s = timestamp_ns / 1e9
+            # P1 #9: msg.humans not msg.states
+            humans = getattr(msg, 'humans', getattr(msg, 'states', []))
+            for state in humans:
                 record = TrajectoryRecord(
+                    session_id=session_id,
+                    sequence_id=sequence_id,
                     timestamp=timestamp_s,
                     track_id=int(state.track_id),
                     x=float(state.x),
@@ -126,6 +146,7 @@ def load_rosbag(path: str | Path, topic: str = "/human_states") -> Dict[int, Lis
                     vy=float(state.vy),
                     c=float(state.confidence),
                 )
-                tracks.setdefault(record.track_id, []).append(record)
+                key = record.trajectory_key()
+                tracks.setdefault(key, []).append(record)
 
-    return {tid: sorted(recs, key=lambda r: r.timestamp) for tid, recs in tracks.items()}
+    return {key: sorted(recs, key=lambda r: r.timestamp) for key, recs in tracks.items()}

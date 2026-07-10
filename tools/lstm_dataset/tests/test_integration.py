@@ -17,7 +17,7 @@ def test_full_pipeline_synthetic():
         # trajectory-level split yields non-empty val/test (needs >= ~7 tracks).
         csv_path = tmpdir / "synthetic.csv"
         with open(csv_path, "w") as f:
-            f.write("timestamp,track_id,x,y,vx,vy,c\n")
+            f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,c\n")
             for track_id in range(1, 13):  # 12 trajectories
                 vx = 0.5 * ((track_id % 5) - 2)  # spread of directions
                 vy = 0.4 * ((track_id % 3) - 1)
@@ -25,7 +25,7 @@ def test_full_pipeline_synthetic():
                     t = i * 0.1
                     x = track_id + vx * t * 10.0
                     y = vy * t * 10.0
-                    f.write(f"{t},{track_id},{x},{y},{vx*10.0},{vy*10.0},0.9\n")
+                    f.write(f"test_session,0,{t},{track_id},{x},{y},{vx*10.0},{vy*10.0},0.9\n")
 
         output_dir = tmpdir / "output"
 
@@ -110,6 +110,92 @@ def test_full_pipeline_synthetic():
         print(f"Test: {manifest['splits']['test']['num_windows']}")
 
 
+def _write_synthetic_csv(csv_path: Path) -> None:
+    """Write a 12-trajectory synthetic CSV (shared by tests below)."""
+    with open(csv_path, "w") as f:
+        f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,c\n")
+        for track_id in range(1, 13):
+            vx = 0.5 * ((track_id % 5) - 2)
+            vy = 0.4 * ((track_id % 3) - 1)
+            for i in range(50):
+                t = i * 0.1
+                x = track_id + vx * t * 10.0
+                y = vy * t * 10.0
+                f.write(f"test_session,0,{t},{track_id},{x},{y},{vx*10.0},{vy*10.0},0.9\n")
+
+
+def test_npz_stores_raw_units_not_normalized():
+    """Regression: the .npz must hold RAW physical units, not normalized values.
+
+    The builder saves windows to disk; TrajectoryDataset (training package)
+    z-score normalizes on read. If the builder also normalized before saving,
+    the LSTM would train on doubly-normalized data (wrong scale) and
+    denormalize() would be wrong. Guard that silent bug here.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        csv_path = tmpdir / "synthetic.csv"
+        _write_synthetic_csv(csv_path)
+        output_dir = tmpdir / "output"
+
+        manifest = build_dataset(
+            input_csv=csv_path, output_dir=output_dir, L=8, H=12, dt=0.125, seed=42
+        )
+
+        import json
+        with open(manifest["normalization_stats"]) as f:
+            stats = json.load(f)
+        mean = np.asarray(stats["mean"], dtype=np.float64)
+
+        with np.load(manifest["splits"]["train"]["path"]) as data:
+            train_in = data["inputs"].astype(np.float64).copy()
+
+        # Raw x positions were built as track_id + drift (>= 1.0), so the
+        # per-channel mean of x is far from 0. If the builder had normalized
+        # before saving, the on-disk train mean would be ~0 for every channel.
+        on_disk_mean = train_in.reshape(-1, 4).mean(axis=0)
+        # x channel raw mean must be well above zero (not standardized to ~0).
+        assert abs(on_disk_mean[0]) > 1.0, (
+            f"x on disk looks normalized (mean={on_disk_mean[0]:.3f}); "
+            "builder must store RAW units"
+        )
+        # And it must match the frozen stats' mean (stats computed from same raw train split).
+        np.testing.assert_allclose(on_disk_mean[0], mean[0], rtol=0.05)
+
+
+def test_trajectory_dataset_normalizes_once_and_roundtrips():
+    """TrajectoryDataset applies normalization exactly once; denormalize inverts it."""
+    torch = __import__("torch")
+    from tools.lstm_training.dataset import TrajectoryDataset
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        csv_path = tmpdir / "synthetic.csv"
+        _write_synthetic_csv(csv_path)
+        output_dir = tmpdir / "output"
+
+        manifest = build_dataset(
+            input_csv=csv_path, output_dir=output_dir, L=8, H=12, dt=0.125, seed=42
+        )
+        stats_path = manifest["normalization_stats"]
+        train_path = manifest["splits"]["train"]["path"]
+
+        ds = TrajectoryDataset(train_path, stats_path)
+        x_norm, y_norm = ds[0]
+
+        # Normalized inputs should be roughly standardized (|value| typically < ~5),
+        # i.e. NOT the raw x ~ track_id scale.
+        assert float(x_norm.abs().max()) < 20.0
+
+        # denormalize(normalize(raw)) == raw for the same window read from disk.
+        with np.load(train_path) as data:
+            raw_x0 = data["inputs"][0].astype(np.float32).copy()
+        recovered = ds.denormalize(x_norm).numpy()
+        np.testing.assert_allclose(recovered, raw_x0, rtol=1e-4, atol=1e-4)
+
+
 if __name__ == "__main__":
     test_full_pipeline_synthetic()
-    print("\n✓ Integration test passed!")
+    test_npz_stores_raw_units_not_normalized()
+    test_trajectory_dataset_normalizes_once_and_roundtrips()
+    print("\n✓ Integration tests passed!")

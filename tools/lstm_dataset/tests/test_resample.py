@@ -9,10 +9,12 @@ from tools.lstm_dataset.schema import TrajectoryRecord
 from tools.lstm_dataset.resample import resample_trajectory
 
 
-def _make_records(times, xs, ys, vxs, vys, track_id=0):
+def _make_records(times, xs, ys, vxs, vys, track_id=0, session_id="test_session", sequence_id=0):
     """Helper to create TrajectoryRecord list."""
     return [
         TrajectoryRecord(
+            session_id=session_id,
+            sequence_id=sequence_id,
             timestamp=float(t),
             track_id=track_id,
             x=float(x),
