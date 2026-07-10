@@ -47,10 +47,9 @@ def resample_trajectory(
     vx = np.array([r.vx for r in records], dtype=np.float64)
     vy = np.array([r.vy for r in records], dtype=np.float64)
 
-    # Build uniform grid
+    # Build uniform grid with exact dt spacing
     t_min, t_max = t[0], t[-1]
-    n_steps = int(np.ceil((t_max - t_min) / dt)) + 1
-    t_uniform = np.linspace(t_min, t_max, n_steps)
+    t_uniform = np.arange(t_min, t_max + 0.5 * dt, dt)
 
     # Linearly interpolate position
     x_interp = np.interp(t_uniform, t, x)
