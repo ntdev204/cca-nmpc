@@ -15,7 +15,7 @@ perception_node:
       measurement_noise_std: 0.15 # R measurement noise
     # Topics — defaults match the Astra camera driver (astra.launch.xml), namespaced under /camera
     rgb_image_topic: "/camera/color/image_raw"
-    depth_image_topic: "/camera/depth/image_raw"
+    depth_image_topic: "/camera/aligned_depth_to_color/image_raw" # aligned depth-to-color (matches require_depth_alignment: true)
     camera_info_topic: "/camera/color/camera_info"
     # Sensor topics use best-effort SensorDataQoS to match the Astra publisher (color_qos/depth_qos: "default")
     sensor_qos: "sensor_data" # one of: sensor_data | reliable
