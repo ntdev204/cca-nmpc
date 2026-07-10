@@ -67,7 +67,8 @@ class UncertaintyEstimator:
         """Grow sigma_h monotonically while the prediction is held (Eq. 13.3)."""
         tr = self._tracks.get(track_id)
         if tr is None:
-            return 0.0
+            # unknown track → fully uncertain (fail-safe; Eq. 8.3)
+            return self._sigma_max
         grown = tr.sigma_base + self._beta * max(0.0, dt_since_refresh)
         tr.sigma_h = min(self._sigma_max, max(tr.sigma_h, grown))
         return tr.sigma_h
@@ -76,12 +77,14 @@ class UncertaintyEstimator:
         """Clipped normalized uncertainty for u_h (Eq. 8.3)."""
         tr = self._tracks.get(track_id)
         if tr is None:
-            return 0.0
+            # unknown track → fully uncertain (fail-safe; Eq. 8.3, sigma_tilde=1.0)
+            return 1.0
         return min(1.0, max(0.0, tr.sigma_h / self._sigma_max))
 
     def sigma_h(self, track_id: int) -> float:
         tr = self._tracks.get(track_id)
-        return tr.sigma_h if tr else 0.0
+        # unknown track → fully uncertain (fail-safe)
+        return tr.sigma_h if tr else self._sigma_max
 
     def drop(self, track_id: int) -> None:
         self._tracks.pop(track_id, None)

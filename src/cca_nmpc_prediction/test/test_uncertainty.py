@@ -55,3 +55,11 @@ def test_invalid_params():
             assert False
         except ValueError:
             pass
+
+
+def test_unknown_track_fail_safe():
+    """Unknown track returns fully uncertain (sigma_tilde=1.0, sigma_h=sigma_max)."""
+    est = UncertaintyEstimator(window_W=5, beta=0.05, sigma_max=10.0)
+    assert est.sigma_tilde(999) == 1.0
+    assert est.sigma_h(999) == 10.0
+    assert est.age(999, 1.0) == 10.0

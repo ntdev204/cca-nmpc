@@ -148,7 +148,8 @@ class ContextNode(Node):
                 rx, ry, rtheta, rvx, rvy,
                 h.x, h.y, h.vx, h.vy, epsilon=self._epsilon,
             )
-            sigma_tilde = self._latest_uncert.get(h.track_id, 0.0)
+            # Missing uncertainty → fully uncertain (fail-safe; Eq. 8.3, sigma_tilde=1.0)
+            sigma_tilde = self._latest_uncert.get(h.track_id, 1.0)
             z = context_score(
                 rm.d_h, rm.v_h_speed, rm.cos_dtheta,
                 h.confidence, sigma_tilde, self._weights,
