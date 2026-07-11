@@ -8,9 +8,8 @@ prevent cross-session ID collision (P1 #7).
 
 from __future__ import annotations
 
-import csv
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import pandas as pd
 
@@ -52,7 +51,7 @@ def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
             y=float(row["y"]),
             vx=float(row["vx"]),
             vy=float(row["vy"]),
-            c=float(row["c"]),
+            c=float(row["confidence"] if "confidence" in row else row["c"]),
         )
         key = record.trajectory_key()
         tracks.setdefault(key, []).append(record)
@@ -64,6 +63,8 @@ def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
 def _validate_csv_columns(df: pd.DataFrame, path: Path) -> None:
     """Raise ValueError if required columns are missing."""
     missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
+    if "c" in missing and "confidence" in df.columns:
+        missing.remove("c")
     if missing:
         raise ValueError(
             f"CSV {path} missing required columns: {missing}. "
@@ -133,7 +134,11 @@ def load_rosbag(
             else:
                 timestamp_s = timestamp_ns / 1e9
             # P1 #9: msg.humans not msg.states
-            humans = getattr(msg, 'humans', getattr(msg, 'states', []))
+            if not hasattr(msg, "humans"):
+                raise ValueError(
+                    f"{topic} must contain cca_nmpc_msgs/HumanStateArray.humans"
+                )
+            humans = msg.humans
             for state in humans:
                 record = TrajectoryRecord(
                     session_id=session_id,

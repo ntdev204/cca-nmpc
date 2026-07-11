@@ -64,8 +64,14 @@ def extract_windows(
         if gap_fraction > max_gap_fraction:
             continue
 
-        inp = data[i : i + L]
-        tgt = data[i + L : i + L + H]
+        inp = data[i : i + L].copy()
+        tgt = data[i + L : i + L + H].copy()
+        # Translation-invariant coordinates relative to the final observation.
+        # Velocities remain in the map-axis convention and predictions are
+        # translated back online after inference.
+        origin = inp[-1, :2].copy()
+        inp[:, :2] -= origin
+        tgt[:, :2] -= origin
         inputs_list.append(inp)
         targets_list.append(tgt)
 

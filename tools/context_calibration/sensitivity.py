@@ -25,7 +25,7 @@ from cca_nmpc_control.nmpc_solver import (  # noqa: E402
     CasadiSolver, AdaptiveParamsInput, HumanSafetyDistance,
 )
 
-from .features import FeatureVector, phi_from_weights
+from .features import FeatureVector, phi_from_weights  # noqa: E402
 
 
 @dataclass
@@ -45,26 +45,24 @@ def _phi_stats(features, weights):
     return float(np.mean(phis)) if phis else 0.0
 
 
-def _solve_success_rate(mean_phi: float, solver: CasadiSolver, N: int) -> float:
-    """Run one representative solve at the mean phi; return 1.0/0.0 success.
-
-    A single scenario is sufficient here: the sweep compares relative success
-    change across perturbations, not an absolute benchmark.
-    """
-    xs = np.linspace(0.0, 3.0, N + 1)
-    ys = np.zeros(N + 1)
-    solver.set_reference({"x": xs, "y": ys, "theta": np.zeros(N + 1)})
-    hx = np.full(N + 1, 1.5)
-    hy = np.zeros(N + 1)
-    solver.set_human_predictions([(1, hx, hy, mean_phi)], [0.0])
-    # d_safe grows with phi (Eq. 10.1 shape): d_safe0 + k_d*phi
-    d_safe = 0.6 + 0.8 * mean_phi
-    solver.set_adaptive_params(AdaptiveParamsInput(
-        vx_max=max(0.08, 1.0 - 0.6 * mean_phi), vy_max=0.8, omega_max=1.2,
-        q_diag=np.array([5.0, 5.0, 2.0]), d_safe_aggregate=d_safe,
-        d_safe_per_human=[HumanSafetyDistance(track_id=1, d_safe=d_safe)],
-    ))
-    return 1.0 if solver.solve(np.zeros(3)).success else 0.0
+def _solve_success_rate(phis: list[float], solver: CasadiSolver, N: int) -> float:
+    """Evaluate diverse crossing distances instead of one mean-phi scenario."""
+    outcomes = []
+    for index, phi in enumerate(phis):
+        xs = np.linspace(0.0, 3.0, N + 1)
+        solver.set_reference({"x": xs, "y": np.zeros(N + 1), "theta": np.zeros(N + 1)})
+        hx = np.full(N + 1, 0.8 + 0.35 * (index % 5))
+        hy = np.linspace(-0.8, 0.8, N + 1)
+        solver.set_human_predictions([(1, hx, hy, phi)], [0.0])
+        d_safe = 0.6 + 0.8 * phi
+        solver.set_adaptive_params(AdaptiveParamsInput(
+            vx_max=max(0.08, 1.0 - 0.6 * phi), vy_max=0.8, omega_max=1.2,
+            q_diag=np.array([5.0, 5.0, 2.0]), d_safe_aggregate=d_safe,
+            d_safe_per_human=[HumanSafetyDistance(track_id=1, d_safe=d_safe)],
+        ))
+        result = solver.solve(np.zeros(3))
+        outcomes.append(result.success and max(result.slacks.values(), default=0.0) < 0.1)
+    return float(np.mean(outcomes))
 
 
 def run_sensitivity(
@@ -83,7 +81,8 @@ def run_sensitivity(
     base_phi = _phi_stats(features, weights)
     base_dsafe = 0.6 + 0.8 * base_phi
     base_vx = max(0.08, 1.0 - 0.6 * base_phi)
-    base_success = _solve_success_rate(base_phi, solver, horizon_N)
+    base_phis = [phi_from_weights(f, weights) for f in features]
+    base_success = _solve_success_rate(base_phis, solver, horizon_N)
 
     report: list[WeightSensitivity] = []
     adjusted = weights
@@ -96,7 +95,8 @@ def run_sensitivity(
             phi = _phi_stats(features, pert)
             dsafe = 0.6 + 0.8 * phi
             vx = max(0.08, 1.0 - 0.6 * phi)
-            success = _solve_success_rate(phi, solver, horizon_N)
+            success = _solve_success_rate(
+                [phi_from_weights(f, pert) for f in features], solver, horizon_N)
             d_change = max(d_change, _pct(dsafe, base_dsafe))
             v_change = max(v_change, _pct(vx, base_vx))
             worst_success_change = max(

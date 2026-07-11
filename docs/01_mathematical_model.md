@@ -127,10 +127,15 @@ Estimated via: YOLO → Depth → TF → Kalman Filter.
 
 # 6. Human Motion Prediction
 
+The LSTM uses the four kinematic channels $[x_h,y_h,v_x,v_y]$ only.
+Detection confidence $c$ remains part of the perception state (5.1) and feeds
+the context estimator, but is not an LSTM feature.
+
 Input / output sequences:
 
 $$
-S_h(k-L+1), \dots, S_h(k)
+S_h^{kin}(k-L+1), \dots, S_h^{kin}(k),\quad
+S_h^{kin}=[x_h,y_h,v_x,v_y]^T
 \;\;\longrightarrow\;\;
 \hat{S}_h(k+1), \dots, \hat{S}_h(k+H)
 \tag{6.1}

@@ -46,12 +46,12 @@ def test_extract_windows_channel_order():
     inputs, targets = extract_windows(resampled, gap_segments, L, H)
 
     # First window input should be timesteps 0,1
-    np.testing.assert_allclose(inputs[0, 0], [1.0, 10.0, 0.1, 0.01])
-    np.testing.assert_allclose(inputs[0, 1], [2.0, 20.0, 0.2, 0.02])
+    np.testing.assert_allclose(inputs[0, 0], [-1.0, -10.0, 0.1, 0.01])
+    np.testing.assert_allclose(inputs[0, 1], [0.0, 0.0, 0.2, 0.02])
 
     # First window target should be timesteps 2,3
-    np.testing.assert_allclose(targets[0, 0], [3.0, 30.0, 0.3, 0.03])
-    np.testing.assert_allclose(targets[0, 1], [4.0, 40.0, 0.4, 0.04])
+    np.testing.assert_allclose(targets[0, 0], [1.0, 10.0, 0.3, 0.03])
+    np.testing.assert_allclose(targets[0, 1], [2.0, 20.0, 0.4, 0.04])
 
 
 def test_extract_windows_discard_gap_windows():

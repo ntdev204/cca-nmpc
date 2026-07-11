@@ -28,6 +28,10 @@ These are kept separate because they serve different purposes: the LSTM dataset 
 | `c` | float64 [0,1] | Detection confidence at that timestep |
 
 ### 2.3 Preprocessing
+
+- Express every input/target window position relative to the final observed
+  position; retain velocity components. Runtime inference translates predicted
+  positions back into the map frame. This prevents memorization of map origin.
 - **Resampling** to a fixed control period $\Delta t$ (matching the eventual `f_LSTM`/context loop rate) via linear interpolation on position, finite-difference re-derivation of velocity where gaps exceed a threshold.
 - **Windowing:** sliding windows of length $L$ (input) + $H$ (prediction horizon) per Eq. (6.1)–(6.2), discarding windows with a track-loss gap longer than a configurable threshold.
 - **Normalization:** z-score normalization of $x, y, v_x, v_y$ per-channel, statistics computed on the **training split only** and reused for val/test and at inference time (stored alongside the frozen model).
@@ -72,5 +76,13 @@ Feeds directly into the two-stage calibration in Section 8.1 of the Mathematical
 ---
 
 ## 4. Versioning & Reproducibility
+
+Raw collection records use the following minimum schema:
+`dataset_version, session_id, run_id, sequence_id, track_id, subject_id,
+scenario_id, environment_id, timestamp, frame_id, x, y, vx, vy, confidence,
+is_observed`. Dataset 01 contains tracker observations (pseudo-labels), not
+independent ground truth. ADE/FDE claims must therefore be reported separately
+for tracker pseudo-label evaluation and for an independently annotated/mocap
+reference subset.
 - Each dataset version tagged with a semantic version (`lstm_dataset_v1`, `context_calib_v1`) and a checksum manifest.
 - Frozen LSTM model artifacts named to include the dataset version they were trained on (e.g., `lstm_predictor_v1_on_lstm_dataset_v1.onnx`) so `prediction_node` config can pin an exact pairing.

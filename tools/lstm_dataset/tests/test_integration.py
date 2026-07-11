@@ -150,22 +150,19 @@ def test_npz_stores_raw_units_not_normalized():
         with np.load(manifest["splits"]["train"]["path"]) as data:
             train_in = data["inputs"].astype(np.float64).copy()
 
-        # Raw x positions were built as track_id + drift (>= 1.0), so the
-        # per-channel mean of x is far from 0. If the builder had normalized
-        # before saving, the on-disk train mean would be ~0 for every channel.
+        # Positions are stored in raw local-frame metres (relative to the final
+        # observation), not z-scores. The final observed position is therefore
+        # exactly the local origin for every input window.
         on_disk_mean = train_in.reshape(-1, 4).mean(axis=0)
-        # x channel raw mean must be well above zero (not standardized to ~0).
-        assert abs(on_disk_mean[0]) > 1.0, (
-            f"x on disk looks normalized (mean={on_disk_mean[0]:.3f}); "
-            "builder must store RAW units"
-        )
+        np.testing.assert_allclose(train_in[:, -1, :2], 0.0, atol=1e-7)
+        np.testing.assert_allclose(on_disk_mean, mean, atol=1e-7)
         # And it must match the frozen stats' mean (stats computed from same raw train split).
         np.testing.assert_allclose(on_disk_mean[0], mean[0], rtol=0.05)
 
 
 def test_trajectory_dataset_normalizes_once_and_roundtrips():
     """TrajectoryDataset applies normalization exactly once; denormalize inverts it."""
-    torch = __import__("torch")
+    __import__("torch")
     from tools.lstm_training.dataset import TrajectoryDataset
 
     with tempfile.TemporaryDirectory() as tmpdir:

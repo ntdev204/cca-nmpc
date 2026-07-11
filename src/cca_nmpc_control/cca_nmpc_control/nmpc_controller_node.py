@@ -17,11 +17,13 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, PoseStamped
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, Path
+from nav2_msgs.msg import Costmap
 
 from cca_nmpc_msgs.msg import (
     AdaptiveParams,
     HumanPredictionArray,
+    HumanStateArray,
     ContextIndexArray,
     NmpcDiagnostics,
     SlackValue,
@@ -41,6 +43,43 @@ def _yaw(q) -> float:
     return math.atan2(siny, cosy)
 
 
+def _resample_reference(path: Path, count: int) -> dict[str, np.ndarray]:
+    if not path.poses:
+        raise ValueError("reference path is empty")
+    points = np.array([[p.pose.position.x, p.pose.position.y] for p in path.poses])
+    headings = np.unwrap(np.array([_yaw(p.pose.orientation) for p in path.poses]))
+    if len(points) == 1:
+        points = np.vstack([points, points])
+        headings = np.repeat(headings, 2)
+    arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(points, axis=0), axis=1))])
+    if arc[-1] <= 1e-9:
+        target = np.zeros(count)
+    else:
+        target = np.linspace(0.0, arc[-1], count)
+    return {
+        "x": np.interp(target, arc, points[:, 0]),
+        "y": np.interp(target, arc, points[:, 1]),
+        "theta": np.interp(target, arc, headings),
+    }
+
+
+def _costmap_obstacles(msg: Costmap, robot_xy: tuple[float, float], limit: int) -> np.ndarray:
+    data = np.asarray(msg.data, dtype=np.uint8)
+    occupied = np.flatnonzero(data >= 253)
+    if occupied.size == 0:
+        return np.empty((0, 2))
+    width = int(msg.metadata.size_x)
+    resolution = float(msg.metadata.resolution)
+    ox = msg.metadata.origin.position.x
+    oy = msg.metadata.origin.position.y
+    points = np.column_stack((
+        ox + (occupied % width + 0.5) * resolution,
+        oy + (occupied // width + 0.5) * resolution,
+    ))
+    distances = np.sum((points - np.asarray(robot_xy)) ** 2, axis=1)
+    return points[np.argsort(distances)[:limit]]
+
+
 class NmpcControllerNode(Node):
     def __init__(self) -> None:
         super().__init__('nmpc_controller_node')
@@ -53,18 +92,26 @@ class NmpcControllerNode(Node):
 
         self._latest_params: AdaptiveParams | None = None
         self._latest_pred: HumanPredictionArray | None = None
+        self._latest_humans: dict[int, tuple[float, float]] = {}  # track_id -> (x, y)
         self._phi_by_track: dict[int, float] = {}   # per-human phi_j_used
         self._pose = (0.0, 0.0, 0.0)
         self._goal = None
+        self._reference_path: Path | None = None
+        self._costmap: Costmap | None = None
+        self._received_at: dict[str, float] = {}
 
         self.create_subscription(AdaptiveParams, '/adaptive_params',
                                  self._on_params, 10)
         self.create_subscription(HumanPredictionArray, '/human_predictions',
                                  self._on_pred, 10)
+        self.create_subscription(HumanStateArray, '/human_states',
+                                 self._on_human_states, 10)
         self.create_subscription(ContextIndexArray, '/context_index',
                                  self._on_context, 10)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
         self.create_subscription(PoseStamped, '/goal_pose', self._on_goal, 10)
+        self.create_subscription(Path, '/reference_path', self._on_reference, 10)
+        self.create_subscription(Costmap, '/local_costmap/costmap', self._on_costmap, 10)
         self._pub_cmd = self.create_publisher(Twist, '/cmd_vel', 10)
         self._pub_diag = self.create_publisher(
             NmpcDiagnostics, '/nmpc_diagnostics', 10)
@@ -74,32 +121,50 @@ class NmpcControllerNode(Node):
     def _load_params(self) -> None:
         d = self.declare_parameter
         d('solver_backend', 'casadi')
-        d('horizon_N', 20); d('dt', 0.05)
-        d('R_diag', [0.1, 0.1, 0.05]); d('Rd_diag', [0.05, 0.05, 0.02])
+        d('horizon_N', 20)
+        d('dt', 0.05)
+        d('f_lstm_hz', 8.0)
+        d('R_diag', [0.1, 0.1, 0.05])
+        d('Rd_diag', [0.05, 0.05, 0.02])
         d('P_diag', [10.0, 10.0, 4.0])
-        d('w_h', 3.0); d('w_obstacle', 2.0); d('P_diag_terminal', 0.0)
-        d('w_slack', 50.0); d('C_collision', 0.9)
-        d('d0', 3.0); d('max_humans_in_solver', 6)
+        d('w_h', 3.0)
+        d('w_obstacle', 2.0)
+        d('P_diag_terminal', 0.0)
+        d('w_slack', 50.0)
+        d('C_collision', 0.9)
+        d('d0', 3.0)
+        d('max_humans_in_solver', 6)
         d('timeout_hold_cycles', 3)
         d('odom_jump_pos_thresh_m', 0.30)
         d('odom_jump_yaw_thresh_rad', 0.35)
         d('safe_stop_decel_limit', 1.0)
+        d('input_timeout_sec', 0.5)
+        d('max_obstacle_samples', 64)
+        d('obstacle_sigma', 0.35)
+        d('solver_max_cpu_time_sec', 0.045)
         g = self.get_parameter
         self._backend = g('solver_backend').value
         self._N = int(g('horizon_N').value)
         self._dt = float(g('dt').value)
         self._solver_params = {
             'horizon_N': self._N, 'dt': self._dt,
+            'f_lstm_hz': float(g('f_lstm_hz').value),
             'max_humans_in_solver': int(g('max_humans_in_solver').value),
             'R_diag': list(g('R_diag').value), 'Rd_diag': list(g('Rd_diag').value),
             'P_diag': list(g('P_diag').value), 'w_h': float(g('w_h').value),
             'w_slack': float(g('w_slack').value), 'd0': float(g('d0').value),
+            'w_obstacle': float(g('w_obstacle').value),
+            'max_obstacle_samples': int(g('max_obstacle_samples').value),
+            'obstacle_sigma': float(g('obstacle_sigma').value),
+            'solver_max_cpu_time_sec': float(g('solver_max_cpu_time_sec').value),
         }
         self._max_humans = int(g('max_humans_in_solver').value)
         self._timeout_hold_cycles = int(g('timeout_hold_cycles').value)
         self._odom_jump_pos = float(g('odom_jump_pos_thresh_m').value)
         self._odom_jump_yaw = float(g('odom_jump_yaw_thresh_rad').value)
         self._safe_stop_decel = float(g('safe_stop_decel_limit').value)
+        self._input_timeout = float(g('input_timeout_sec').value)
+        self._max_obstacles = int(g('max_obstacle_samples').value)
 
     def _build_solver(self):
         """Construct the backend from YAML — node stays backend-agnostic."""
@@ -114,23 +179,59 @@ class NmpcControllerNode(Node):
     # -------------------------------------------------------------- callbacks
     def _on_params(self, msg: AdaptiveParams) -> None:
         self._latest_params = msg
+        self._mark_received('params')
 
     def _on_pred(self, msg: HumanPredictionArray) -> None:
         self._latest_pred = msg
+        self._mark_received('predictions')
+
+    def _on_human_states(self, msg: HumanStateArray) -> None:
+        self._latest_humans = {
+            h.track_id: (h.position.x, h.position.y) for h in msg.humans
+        }
+        self._mark_received('humans')
 
     def _on_context(self, msg: ContextIndexArray) -> None:
         # Per-human gated phi_j feeds J_human weighting in the solver. Sourced
         # from /context_index (the correct origin) — plan 08's subscription list
         # omitted it; added here for J_human consistency (docs/plan gap).
         self._phi_by_track = {c.track_id: c.phi_j_used for c in msg.contexts}
+        self._mark_received('context')
 
     def _on_odom(self, msg: Odometry) -> None:
         p = msg.pose.pose.position
         self._pose = (p.x, p.y, _yaw(msg.pose.pose.orientation))
+        self._mark_received('odom')
 
     def _on_goal(self, msg: PoseStamped) -> None:
         p = msg.pose.position
         self._goal = (p.x, p.y, _yaw(msg.pose.orientation))
+
+    def _on_reference(self, msg: Path) -> None:
+        if msg.header.frame_id and msg.header.frame_id != 'map':
+            self.get_logger().error('reference_path must be in map frame')
+            return
+        self._reference_path = msg
+        self._mark_received('reference')
+
+    def _on_costmap(self, msg: Costmap) -> None:
+        if msg.header.frame_id and msg.header.frame_id != 'map':
+            self.get_logger().error('costmap must be in map frame')
+            return
+        self._costmap = msg
+        self._mark_received('costmap')
+
+    def _mark_received(self, name: str) -> None:
+        self._received_at[name] = time.monotonic()
+
+    def _inputs_fresh(self) -> bool:
+        now = time.monotonic()
+        required = ('params', 'predictions', 'humans', 'context', 'odom', 'reference', 'costmap')
+        return all(
+            name in self._received_at
+            and now - self._received_at[name] <= self._input_timeout
+            for name in required
+        )
 
     # ------------------------------------------------------------------ cycle
     def _on_cycle(self) -> None:
@@ -140,7 +241,7 @@ class NmpcControllerNode(Node):
             self._solver.reset()
             self.get_logger().warn('warm-start invalidated -> solver.reset()')
 
-        if self._latest_params is None or self._goal is None:
+        if self._latest_params is None or self._goal is None or not self._inputs_fresh():
             self._publish_stop()          # no inputs yet -> safe default
             return
 
@@ -179,23 +280,32 @@ class NmpcControllerNode(Node):
                 f'{self._dt*1e3:.1f}ms')
 
     def _push_inputs(self) -> None:
-        # reference: straight line toward the goal over the horizon
-        gx, gy, gth = self._goal
-        x0, y0, _th = self._pose
-        xs = np.linspace(x0, gx, self._N + 1)
-        ys = np.linspace(y0, gy, self._N + 1)
-        ths = np.full(self._N + 1, gth)
-        self._solver.set_reference({'x': xs, 'y': ys, 'theta': ths})
+        self._solver.set_reference(_resample_reference(self._reference_path, self._N + 1))
+        obstacles = _costmap_obstacles(
+            self._costmap, self._pose[:2], self._max_obstacles
+        )
+        self._solver.set_obstacles(obstacles)
 
         preds, uncs = [], []
         if self._latest_pred is not None:
-            for hp in self._latest_pred.predictions[: self._max_humans]:
+            candidates = []
+            for hp in self._latest_pred.predictions:
                 # Conservative default phi_j=1.0 if context not yet seen for a
                 # tracked human (be MORE cautious under missing context, matching
                 # the dropout philosophy in Architecture Section 4).
                 phi_j = self._phi_by_track.get(hp.track_id, 1.0)
-                preds.append((hp.track_id, np.array(hp.x_hat),
-                              np.array(hp.y_hat), phi_j))
+                x_hat = np.asarray(hp.x_hat, float)
+                y_hat = np.asarray(hp.y_hat, float)
+                current = self._latest_humans.get(hp.track_id)
+                if current is None or x_hat.size == 0 or y_hat.size == 0:
+                    continue
+                risk = (phi_j, -float(np.min(np.hypot(x_hat - self._pose[0], y_hat - self._pose[1]))))
+                candidates.append((risk, hp, phi_j, current))
+            candidates.sort(key=lambda item: item[0], reverse=True)
+            for _risk, hp, phi_j, current in candidates[:self._max_humans]:
+                preds.append((hp.track_id,
+                              np.concatenate([[current[0]], np.asarray(hp.x_hat, float)]),
+                              np.concatenate([[current[1]], np.asarray(hp.y_hat, float)]), phi_j))
                 uncs.append(0.0)
         self._solver.set_human_predictions(preds, uncs)
 

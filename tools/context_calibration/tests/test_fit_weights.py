@@ -1,8 +1,6 @@
 """Tests for stage-1 weight fit + feature reconstruction (CB-02, CB-03)."""
 import csv
-from pathlib import Path
 
-import numpy as np
 
 from tools.context_calibration.load import load_calibration_csv, danger_label
 from tools.context_calibration.features import compute_features

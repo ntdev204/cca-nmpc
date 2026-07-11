@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from tools.lstm_dataset.normalize import (
     apply_normalization,

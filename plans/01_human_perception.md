@@ -33,7 +33,7 @@ Assumption for this plan: `cca_nmpc_msgs` builds successfully or will be verifie
 - The perception node subscribes to RGB image, depth image, camera info, and TF at runtime.
 - The node loads a configured YOLO26m TensorRT `.engine`, detects people, samples aligned depth, projects detections into 3D camera coordinates, transforms to `map`, tracks people with stable `track_id`, and publishes `/human_states`.
 - All tunables are declared ROS2 parameters and loaded from YAML.
-- TensorRT-specific logic is isolated behind a detector interface so unit tests can use a mock detector.
+- TensorRT-specific logic is isolated behind a detector interface; geometry and tracking are tested independently without substituting the runtime detector.
 - Pure logic tests cover depth projection, Kalman predict/update, track association, confidence filtering, and stale-track removal.
 - `colcon build` and `colcon test` pass for `cca_nmpc_msgs` and `cca_nmpc_perception`.
 
@@ -116,13 +116,13 @@ INPUT → the updated `perception_node` block in `docs/07_yaml_parameters.md`.
 OUTPUT → `config/human_perception.yaml` with `yolo_engine_path`, Astra topic defaults (`/camera/color/image_raw`, aligned depth topic, `/camera/color/camera_info`), `sensor_qos`, `camera_optical_frame`, `map_frame`, `require_depth_alignment`, detection threshold, depth sampling radius, `max_track_age_sec`, association distance gate, and Kalman noise.
 VERIFY → node declares and reads every key; startup fails clearly if `yolo_engine_path` is missing/unreadable, and warns/aborts if `require_depth_alignment` is true but the configured depth topic is not an aligned/registered stream.
 
-### HP-03 — Detector interface + mock + TensorRT adapter
+### HP-03 — Detector interface + TensorRT adapter
 
 Agent: `backend-specialist`; skills: `python-patterns`, `clean-code`; priority: P1; dependencies: HP-02.
 
 INPUT → RGB image frames and YOLO26m TensorRT `.engine` path.
-OUTPUT → `detector.py` with `Detection`, `HumanDetector` interface, `MockDetector` (test-only, no TensorRT import), and `TensorRtYoloDetector` that loads the engine, runs inference, filters person class, applies confidence threshold, returns normalized boxes.
-VERIFY → mock path returns deterministic boxes without importing TensorRT; TensorRT path initializes with a valid engine and raises a clear config error on an invalid/missing engine before the node spins.
+OUTPUT → `detector.py` with `Detection`, `HumanDetector` interface and `TensorRtYoloDetector` that loads the engine, runs inference, filters person class, applies confidence threshold, returns normalized boxes.
+VERIFY → TensorRT path raises a clear config error on an invalid/missing engine before the node spins; geometry/tracking tests do not instantiate TensorRT.
 
 ### HP-04 — Depth projection (optical frame)
 
@@ -138,7 +138,7 @@ Agent: `backend-specialist`; skills: `api-patterns`; priority: P1; dependencies:
 
 INPUT → optical-frame 3D point and configured `map_frame`; source frame taken from the incoming header, not a hard-coded `camera_link`.
 OUTPUT → transform to `map` via TF and extract 2D `(x, y)` for the CCA-NMPC state.
-VERIFY → mocked TF test confirms transform is applied from the optical frame; runtime skips detections (no publish of wrong-frame data) when TF is unavailable or times out.
+VERIFY → TF integration test confirms transform is applied from the optical frame; runtime skips detections when TF is unavailable or times out.
 
 ### HP-06 — Kalman filter + track manager
 
@@ -154,7 +154,7 @@ Agent: `backend-specialist`; skills: `api-patterns`, `clean-code`; priority: P1;
 
 INPUT → synchronized RGB/depth/camera-info (SensorDataQoS), TF, detector, projector, tracker.
 OUTPUT → ROS2 node publishing `cca_nmpc_msgs/HumanStateArray` on `/human_states`; each `HumanState` carries `header, track_id, x, y, vx, vy, confidence` (per-message `header.stamp` = detector observation time); `HumanStateArray.header` carries output frame (`map`) and the most-recent observation time. Note: `HumanState` uses `std_msgs/Header header`, NOT a bare `stamp` field.
-VERIFY → with `MockDetector` and synthetic image/depth/camera-info, a node-level or launch smoke test publishes a valid `/human_states` without TensorRT hardware.
+VERIFY → ROS2 target launch with a valid engine and recorded RGB-D publishes a valid `/human_states`.
 
 ### HP-08 — Launch integration (camera + alignment)
 
@@ -178,7 +178,7 @@ VERIFY → average perception cycle supports target camera FPS and identifies th
 - Run `colcon test --packages-select cca_nmpc_msgs cca_nmpc_perception`.
 - Run `colcon test-result --verbose` and confirm zero failures.
 - Run `python .agents/skills/lint-and-validate/scripts/lint_runner.py .` and review output before fixing anything.
-- Mock runtime smoke test: launch perception with `MockDetector`, publish synthetic RGB/depth/camera-info using SensorDataQoS, and confirm `/human_states` publishes a valid `HumanStateArray`.
+- Runtime smoke test: launch perception on the target with a valid TensorRT engine and recorded RGB-D, then confirm `/human_states` publishes a valid `HumanStateArray`.
 - Frame smoke test: confirm projected points originate in `CameraInfo.header.frame_id` / optical frame and are TF-transformed into `map` before publish.
 - Hardware runtime smoke test: start Astra camera with depth registration enabled or aligned-depth topic configured, launch perception with the TensorRT engine, confirm stable `track_id` for a visible person.
 - Rosbag smoke test: record `/human_states`, camera topics, `/tf`, and `/tf_static`; confirm timestamps, QoS compatibility, frame IDs, and depth alignment are consistent.
@@ -186,7 +186,7 @@ VERIFY → average perception cycle supports target camera FPS and identifies th
 ## Notes and Risks
 
 - Do not recreate or rename `cca_nmpc_msgs`; perception should depend on the implementation already present.
-- TensorRT/CUDA availability is platform-specific. Keep TensorRT imports isolated so tests and non-GPU development can run with `MockDetector`.
+- TensorRT/CUDA availability is platform-specific. Keep imports isolated so ROS-free geometry and tracking tests run on non-GPU development machines.
 - The `.engine` is GPU/TensorRT-version specific and must be built on (or for) the target device; do not commit a binary engine as if it were portable.
 - Project into the optical frame (`CameraInfo.header.frame_id`), never `camera_link` — the two are not axis-aligned, and using `camera_link` silently produces wrong positions.
 - Astra defaults to `depth_registration:=false`, so depth is not aligned to color out of the box. Alignment is a hard prerequisite: enable hardware D2C or subscribe to an aligned depth-to-color topic before trusting projected positions.

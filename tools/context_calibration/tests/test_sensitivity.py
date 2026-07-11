@@ -2,15 +2,14 @@
 import sys
 from pathlib import Path
 
-import numpy as np
 
 _CTX = Path(__file__).resolve().parents[3] / "src" / "cca_nmpc_context"
 if str(_CTX) not in sys.path:
     sys.path.insert(0, str(_CTX))
 from cca_nmpc_context.context_score import ContextWeights  # noqa: E402
 
-from tools.context_calibration.features import FeatureVector
-from tools.context_calibration.sensitivity import run_sensitivity
+from tools.context_calibration.features import FeatureVector  # noqa: E402
+from tools.context_calibration.sensitivity import run_sensitivity  # noqa: E402
 
 
 def _features(n=8):

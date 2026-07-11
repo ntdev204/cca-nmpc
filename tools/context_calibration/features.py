@@ -18,10 +18,10 @@ if str(_CTX_PKG) not in sys.path:
 
 from cca_nmpc_context.relative_motion import compute_relative_motion  # noqa: E402
 from cca_nmpc_context.context_score import (  # noqa: E402
-    ContextWeights, context_score, sigmoid, uncertainty_term,
+    ContextWeights, sigmoid, uncertainty_term,
 )
 
-from .load import CalibrationRecord
+from .load import CalibrationRecord  # noqa: E402
 
 
 @dataclass(frozen=True)

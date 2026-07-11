@@ -26,15 +26,27 @@ def run_calibration(
     features = [compute_features(r, d0, v_max_ref) for r in records]
     labels = [danger_label(r, danger_distance) for r in records]
 
-    weights = fit_weights(features, labels)
-    acc = classification_accuracy(features, labels, weights)
+    if len(features) < 5:
+        raise ValueError("calibration requires at least 5 samples for held-out validation")
+    indices = list(range(len(features)))
+    split = max(1, int(0.8 * len(indices)))
+    train_idx, val_idx = indices[:split], indices[split:]
+    if not val_idx:
+        val_idx = train_idx[-1:]
+        train_idx = train_idx[:-1]
+    weights = fit_weights([features[i] for i in train_idx], [labels[i] for i in train_idx])
+    train_acc = classification_accuracy(
+        [features[i] for i in train_idx], [labels[i] for i in train_idx], weights)
+    val_acc = classification_accuracy(
+        [features[i] for i in val_idx], [labels[i] for i in val_idx], weights)
     adjusted, sens = run_sensitivity(
         features, weights, perturbation_pct, max_degradation_pct)
 
     return {
         "weights": weights,
         "adjusted_weights": adjusted,
-        "train_accuracy": acc,
+        "train_accuracy": train_acc,
+        "validation_accuracy": val_acc,
         "sensitivity": sens,
     }
 
@@ -54,6 +66,7 @@ def main(argv=None) -> int:
         args.perturbation_pct, args.max_degradation_pct,
     )
     print(f"# train accuracy: {out['train_accuracy']:.3f}\n")
+    print(f"# validation accuracy: {out['validation_accuracy']:.3f}\n")
     print(weights_yaml_block(out["adjusted_weights"]))
     print("\n# sensitivity report\n")
     print(sensitivity_table(out["sensitivity"]))

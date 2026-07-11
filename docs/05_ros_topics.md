@@ -34,6 +34,8 @@ All topics use `cca_nmpc_msgs` custom message types unless a standard ROS2 type 
 | Topic | Message Type | Publisher | Subscriber(s) | QoS | Rate |
 |---|---|---|---|---|---|
 | `/odom` | `nav_msgs/Odometry` | robot base driver | `context_node`, `nmpc_controller_node` | SensorDataQoS | odom rate |
+| `/goal_pose` | `geometry_msgs/PoseStamped` | mission manager | `nmpc_controller_node` | Reliable | event |
+| `/reference_path` | `nav_msgs/Path` | Semantic A*/Nav2 planner | `nmpc_controller_node` | Reliable | planner rate |
 | `/local_costmap/costmap` | `nav2_msgs/Costmap` | Nav2 costmap server | `nmpc_controller_node` | Reliable | costmap update rate |
 | `/cmd_vel` | `geometry_msgs/Twist` | `nmpc_controller_node` | robot base driver | Reliable, KeepLast(1) | $f_{NMPC}$ |
 | `/nmpc_diagnostics` | `cca_nmpc_msgs/NmpcDiagnostics` | `nmpc_controller_node` | logging / rosbag, RViz overlay | Reliable, KeepLast(50) | $f_{NMPC}$ |

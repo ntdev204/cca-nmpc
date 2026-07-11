@@ -35,7 +35,3 @@ perception_node:
     # Depth alignment requirement — Astra driver defaults to depth_registration:=false
     # Either launch with depth_registration:=true (hardware D2C) or subscribe to aligned depth-to-color topic
     require_depth_alignment: true
-
-    # Mock detector — set true for non-GPU dev / smoke tests. Skips TensorRT
-    # engine-file validation and uses a deterministic MockDetector.
-    use_mock_detector: false

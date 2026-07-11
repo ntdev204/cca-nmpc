@@ -9,7 +9,7 @@ if str(_CTX) not in sys.path:
     sys.path.insert(0, str(_CTX))
 from cca_nmpc_context.context_score import ContextWeights  # noqa: E402
 
-from .sensitivity import WeightSensitivity
+from .sensitivity import WeightSensitivity  # noqa: E402
 
 
 def weights_yaml_block(weights: ContextWeights) -> str:

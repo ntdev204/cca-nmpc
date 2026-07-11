@@ -17,7 +17,7 @@ if str(_CTX_PKG) not in sys.path:
     sys.path.insert(0, str(_CTX_PKG))
 from cca_nmpc_context.context_score import ContextWeights  # noqa: E402
 
-from .features import FeatureVector
+from .features import FeatureVector  # noqa: E402
 
 
 def _design_matrix(features: list[FeatureVector]) -> np.ndarray:
@@ -53,6 +53,9 @@ def fit_weights(
         p = 1.0 / (1.0 + np.exp(-z))
         grad = X.T @ (p - y) / n + l2 * w
         w -= lr * grad
+        # Safety monotonicity: distance-risk, speed, heading alignment and
+        # uncertainty contributions may not invert their intended effect.
+        w[:4] = np.maximum(w[:4], 0.0)
 
     return ContextWeights(
         w_d=float(w[0]), w_v=float(w[1]), w_theta=float(w[2]),

@@ -16,7 +16,7 @@ setup(
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'numpy', 'casadi'],
     zip_safe=True,
     maintainer='CCA-NMPC Team',
     maintainer_email='dev@example.com',

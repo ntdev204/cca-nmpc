@@ -134,7 +134,6 @@ def test_split_preserves_shapes():
 
 def test_composite_key_prevents_cross_session_collision():
     """Test that same track_id in different sessions produces distinct keys."""
-    from tools.lstm_dataset.schema import TrajectoryRecord
 
     # Two records with same track_id but different session_id
     rec1 = TrajectoryRecord(

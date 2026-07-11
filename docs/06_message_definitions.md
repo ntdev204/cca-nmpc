@@ -135,7 +135,7 @@ float64 d_safe_aggregate     # for monitoring/diagnostics only
 float64 vx_max               # Eq. 10.2
 float64 vy_max               # Eq. 10.2
 float64 omega_max            # Eq. 10.2
-float64[3] Q_diag            # diagonal of Q(phi), Eq. 10.3 -- state [x_r, y_r, theta_r], NOT a flattened 3x3
+float64[3] q_diag            # diagonal of Q(phi), Eq. 10.3 -- state [x_r, y_r, theta_r], NOT a flattened 3x3
 float64 phi_aggregate_used   # phi value this parameter set was generated from
 HumanSafetyDistance[] d_safe_per_human  # per-human d_safe(phi_j), matched by track_id
 ```
