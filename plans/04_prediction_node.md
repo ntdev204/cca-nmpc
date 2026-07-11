@@ -65,7 +65,7 @@ VERIFY (later) → `colcon build --packages-select cca_nmpc_prediction`. VERIFY 
 Agent: `backend-specialist`; skills: `clean-code`; priority: P0; dependencies: PR-01.
 
 INPUT → `docs/07_yaml_parameters.md` prediction block.
-OUTPUT → `prediction.yaml` with `model_path` (ONNX), `normalization_stats_path`, `L`, `H`, `f_lstm_hz`, `uncertainty_window_W`, `sigma_growth_rate_beta`, `sigma_max`.
+OUTPUT → `prediction.yaml` with TensorRT `engine_path`, `normalization_stats_path`, `L`, `H`, `f_lstm_hz`, `uncertainty_window_W`, `sigma_growth_rate_beta`, `sigma_max`.
 VERIFY → node reads all keys; fails clearly if model/stats missing. Note: `sigma_max` also exists under `context_node` in docs/07 and MUST hold the same value (shared saturation ceiling, Eq. 8.3/13.3).
 
 ### PR-03 — Per-track rolling buffer

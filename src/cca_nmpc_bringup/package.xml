@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cca_nmpc_bringup</name>
+  <version>0.1.0</version>
+  <description>Launch and combined configuration for the CCA-NMPC stack.</description>
+  <maintainer email="dev@example.com">CCA-NMPC Team</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>cca_nmpc_perception</exec_depend>
+  <exec_depend>cca_nmpc_prediction</exec_depend>
+  <exec_depend>cca_nmpc_context</exec_depend>
+  <exec_depend>cca_nmpc_adaptive_params</exec_depend>
+  <exec_depend>cca_nmpc_control</exec_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

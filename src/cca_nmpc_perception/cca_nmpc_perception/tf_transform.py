@@ -63,6 +63,6 @@ class FrameTransformer:
             tf2_ros.LookupException,
             tf2_ros.ConnectivityException,
             tf2_ros.ExtrapolationException
-        ) as e:
+        ):
             # Transform unavailable — caller will skip this detection
             return None

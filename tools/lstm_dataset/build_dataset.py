@@ -15,11 +15,11 @@ import numpy as np
 
 from .loaders import load_csv
 from .normalize import (
-    apply_normalization,
     compute_normalization_stats,
     save_normalization_stats,
 )
 from .resample import resample_trajectory
+from .schema import TrajectoryKey
 from .split import split_by_trajectory
 from .windowing import extract_windows
 
@@ -72,24 +72,24 @@ def build_dataset(
 
     # 2. Resample each track to fixed dt
     print(f"[2/6] Resampling to dt={dt}s...")
-    resampled_tracks: Dict[int, Tuple] = {}
-    for track_id, records in trajectories.items():
+    resampled_tracks: Dict[TrajectoryKey, Tuple] = {}
+    for key, records in trajectories.items():
         resampled, gaps = resample_trajectory(
             records, dt=dt,
             velocity_rederive_threshold=velocity_rederive_threshold,
         )
-        resampled_tracks[track_id] = (resampled, gaps)
+        resampled_tracks[key] = (resampled, gaps)
     print(f"      Resampled {len(resampled_tracks)} trajectories.")
 
     # 3. Extract sliding windows per track
     print(f"[3/6] Creating sliding windows (L={L}, H={H})...")
-    track_windows: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
-    for track_id, (resampled, gaps) in resampled_tracks.items():
+    track_windows: Dict[TrajectoryKey, Tuple[np.ndarray, np.ndarray]] = {}
+    for key, (resampled, gaps) in resampled_tracks.items():
         if len(resampled) < L + H:
             continue
         inputs, targets = extract_windows(resampled, gaps, L=L, H=H)
         if len(inputs) > 0:
-            track_windows[track_id] = (inputs, targets)
+            track_windows[key] = (inputs, targets)
 
     if not track_windows:
         raise ValueError("No valid windows created. Check input data and L/H values.")
@@ -113,20 +113,18 @@ def build_dataset(
     save_normalization_stats(stats, stats_path)
     print(f"      Saved stats to {stats_path}")
 
-    # Apply normalization to all splits (immutable: returns new arrays)
-    train_in_norm = apply_normalization(train_in, stats)
-    train_tgt_norm = apply_normalization(train_tgt, stats)
-    val_in_norm = apply_normalization(val_in, stats)
-    val_tgt_norm = apply_normalization(val_tgt, stats)
-    test_in_norm = apply_normalization(test_in, stats)
-    test_tgt_norm = apply_normalization(test_tgt, stats)
-
-    # 6. Save .npz files
-    print("[6/6] Writing .npz files...")
+    # 6. Save .npz files in RAW physical units (NOT normalized).
+    # Normalization is applied exactly once, at read time, by
+    # TrajectoryDataset using these frozen train-split stats. Storing raw
+    # windows here keeps the stats the single source of truth and avoids the
+    # silent double-normalization bug (builder normalizing + Dataset
+    # normalizing again would train the LSTM on a (z-mean)/std scale and make
+    # denormalize() wrong). See tools/lstm_training/dataset.py.
+    print("[6/6] Writing .npz files (raw units; normalized once at read time)...")
     splits = {
-        "train": (train_in_norm, train_tgt_norm),
-        "val": (val_in_norm, val_tgt_norm),
-        "test": (test_in_norm, test_tgt_norm),
+        "train": (train_in, train_tgt),
+        "val": (val_in, val_tgt),
+        "test": (test_in, test_tgt),
     }
 
     manifest = {

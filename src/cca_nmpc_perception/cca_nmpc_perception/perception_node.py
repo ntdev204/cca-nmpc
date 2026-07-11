@@ -7,16 +7,15 @@ tracks with Kalman filter, publishes HumanStateArray.
 import time
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import SensorDataQoS
+from rclpy.qos import qos_profile_sensor_data
 from pathlib import Path
-import numpy as np
 import cv_bridge
 import message_filters
 from sensor_msgs.msg import Image, CameraInfo
 import tf2_ros
 
 from cca_nmpc_msgs.msg import HumanState, HumanStateArray
-from .detector import Detection, MockDetector
+from .detector import TensorRtYoloDetector
 from .depth_projection import Detection2D, project_detection_to_3d
 from .tf_transform import FrameTransformer
 from .track_manager import TrackManager
@@ -52,10 +51,9 @@ class PerceptionNode(Node):
         self._bridge = cv_bridge.CvBridge()
 
         # Synchronized subscribers
-        qos = SensorDataQoS()
-        self._rgb_sub = message_filters.Subscriber(self, Image, self.rgb_image_topic, qos_profile=qos)
-        self._depth_sub = message_filters.Subscriber(self, Image, self.depth_image_topic, qos_profile=qos)
-        self._info_sub = message_filters.Subscriber(self, CameraInfo, self.camera_info_topic, qos_profile=qos)
+        self._rgb_sub = message_filters.Subscriber(self, Image, self.rgb_image_topic, qos_profile=qos_profile_sensor_data)
+        self._depth_sub = message_filters.Subscriber(self, Image, self.depth_image_topic, qos_profile=qos_profile_sensor_data)
+        self._info_sub = message_filters.Subscriber(self, CameraInfo, self.camera_info_topic, qos_profile=qos_profile_sensor_data)
 
         self._sync = message_filters.ApproximateTimeSynchronizer(
             [self._rgb_sub, self._depth_sub, self._info_sub],
@@ -67,7 +65,7 @@ class PerceptionNode(Node):
         self.get_logger().info('PerceptionNode started')
         self.get_logger().info(f'  RGB: {self.rgb_image_topic}')
         self.get_logger().info(f'  Depth: {self.depth_image_topic}')
-        self.get_logger().info(f'  Output: /human_states')
+        self.get_logger().info('  Output: /human_states')
 
     def _declare_and_load_params(self) -> None:
         self.declare_parameter('yolo_engine_path', 'models/yolo26m_human.engine')
@@ -77,14 +75,13 @@ class PerceptionNode(Node):
         self.declare_parameter('kalman.process_noise_std', 0.1)
         self.declare_parameter('kalman.measurement_noise_std', 0.15)
         self.declare_parameter('rgb_image_topic', '/camera/color/image_raw')
-        self.declare_parameter('depth_image_topic', '/camera/depth/image_raw')
+        self.declare_parameter('depth_image_topic', '/camera/aligned_depth_to_color/image_raw')
         self.declare_parameter('camera_info_topic', '/camera/color/camera_info')
         self.declare_parameter('sensor_qos', 'sensor_data')
         self.declare_parameter('depth_sampling_radius', 5)
         self.declare_parameter('camera_optical_frame', 'camera_color_optical_frame')
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('require_depth_alignment', True)
-        self.declare_parameter('use_mock_detector', False)
 
         self.yolo_engine_path = self.get_parameter('yolo_engine_path').value
         self.detection_confidence_threshold = self.get_parameter('detection_confidence_threshold').value
@@ -100,21 +97,13 @@ class PerceptionNode(Node):
         self.camera_optical_frame = self.get_parameter('camera_optical_frame').value
         self.map_frame = self.get_parameter('map_frame').value
         self.require_depth_alignment = self.get_parameter('require_depth_alignment').value
-        self.use_mock_detector = self.get_parameter('use_mock_detector').value
 
     def _validate_params(self) -> None:
-        # In mock mode (smoke tests / non-GPU dev) the TensorRT engine is not
-        # required, so skip ONLY the engine-file validation. Depth-alignment
-        # still matters: the mock pipeline projects detections using the depth
-        # image, so an unaligned depth topic would still yield wrong positions.
-        if not self.use_mock_detector:
-            engine_path = Path(self.yolo_engine_path)
-            if not engine_path.exists():
-                self.get_logger().error(f'YOLO engine not found: {self.yolo_engine_path}')
-                raise FileNotFoundError(f'Missing YOLO engine: {self.yolo_engine_path}')
-            if not engine_path.is_file():
-                self.get_logger().error(f'YOLO engine is not a file: {self.yolo_engine_path}')
-                raise ValueError(f'YOLO engine must be a file: {self.yolo_engine_path}')
+        engine_path = Path(self.yolo_engine_path)
+        if not engine_path.exists():
+            raise FileNotFoundError(f'Missing YOLO engine: {self.yolo_engine_path}')
+        if not engine_path.is_file():
+            raise ValueError(f'YOLO engine must be a file: {self.yolo_engine_path}')
 
         if self.require_depth_alignment:
             depth_lower = self.depth_image_topic.lower()
@@ -126,21 +115,13 @@ class PerceptionNode(Node):
                 raise ValueError(f'Depth topic must indicate alignment: {self.depth_image_topic}')
 
     def _build_detector(self):
-        """Attempt TensorRT detector; fall back to MockDetector if TRT unavailable."""
-        if self.use_mock_detector:
-            self.get_logger().warn('use_mock_detector=true, using MockDetector')
-            return MockDetector()
-        try:
-            from .detector import TensorRtYoloDetector
-            detector = TensorRtYoloDetector(
-                self.yolo_engine_path,
-                self.detection_confidence_threshold
-            )
-            self.get_logger().info('Using TensorRtYoloDetector')
-            return detector
-        except (ImportError, FileNotFoundError, RuntimeError) as e:
-            self.get_logger().warn(f'TRT detector unavailable ({e}), using MockDetector')
-            return MockDetector()
+        """Build the explicitly selected detector; production never falls back."""
+        detector = TensorRtYoloDetector(
+            self.yolo_engine_path,
+            self.detection_confidence_threshold
+        )
+        self.get_logger().info('Using TensorRtYoloDetector')
+        return detector
 
     def _sync_callback(
         self,
@@ -214,6 +195,8 @@ class PerceptionNode(Node):
         msg.header.frame_id = self.map_frame
 
         for track in active_tracks:
+            if not track.is_observed:
+                continue
             state = HumanState()
             state.header.stamp = stamp
             state.header.frame_id = self.map_frame

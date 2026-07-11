@@ -16,6 +16,3 @@ prediction_node:
     # sigma_max MUST equal context_node.sigma_max (shared ceiling, Eq. 8.3/13.3)
     sigma_max: 0.5
     max_track_age_sec: 1.0
-    # Set true for non-GPU dev / smoke tests: uses a constant-velocity mock and
-    # skips TensorRT engine loading.
-    use_mock_predictor: false

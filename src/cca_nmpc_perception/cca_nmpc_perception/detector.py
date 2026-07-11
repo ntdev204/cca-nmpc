@@ -1,4 +1,4 @@
-"""Detector interface, mock, and TensorRT adapter for YOLO human detection."""
+"""Detector interface and TensorRT adapter for YOLO human detection."""
 
 from __future__ import annotations
 
@@ -47,19 +47,6 @@ class HumanDetector(Protocol):
         ...
 
 
-class MockDetector:
-    """Deterministic mock detector for unit tests — no TensorRT dependency.
-
-    Returns a fixed list of detections configured at construction time.
-    """
-
-    def __init__(self, detections: Sequence[Detection] | None = None) -> None:
-        self._detections: Sequence[Detection] = detections if detections is not None else []
-
-    def detect(self, image: np.ndarray) -> Sequence[Detection]:  # noqa: ARG002
-        return self._detections
-
-
 class TensorRtYoloDetector:
     """YOLO26m TensorRT .engine adapter.
 
@@ -84,6 +71,8 @@ class TensorRtYoloDetector:
 
         self._confidence_threshold = confidence_threshold
         self._engine, self._context = self._load_engine(engine_path)
+        import pycuda.driver as cuda
+        self._stream = cuda.Stream()
 
     @staticmethod
     def _load_engine(engine_path: str):
@@ -93,7 +82,7 @@ class TensorRtYoloDetector:
         except ImportError as exc:
             raise ImportError(
                 'tensorrt package is not installed. '
-                'Use MockDetector for environments without GPU/TensorRT.'
+                'Install the target TensorRT runtime on the deployment device.'
             ) from exc
 
         logger = trt.Logger(trt.Logger.WARNING)
@@ -148,13 +137,13 @@ class TensorRtYoloDetector:
         d_input = cuda.mem_alloc(blob.nbytes)
         d_output = cuda.mem_alloc(host_output.nbytes)
 
-        cuda.memcpy_htod(d_input, blob)
+        cuda.memcpy_htod_async(d_input, blob, self._stream)
 
         self._context.set_tensor_address(input_binding, int(d_input))
         self._context.set_tensor_address(output_binding, int(d_output))
-        self._context.execute_async_v3(stream_handle=cuda.Stream().handle)
-
-        cuda.memcpy_dtoh(host_output, d_output)
+        self._context.execute_async_v3(stream_handle=self._stream.handle)
+        cuda.memcpy_dtoh_async(host_output, d_output, self._stream)
+        self._stream.synchronize()
         return host_output
 
     def _get_input_shape(self) -> tuple[int, int]:

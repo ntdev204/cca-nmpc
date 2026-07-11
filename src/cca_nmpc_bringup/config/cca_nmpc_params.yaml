@@ -1,0 +1,80 @@
+perception_node:
+  ros__parameters:
+    yolo_engine_path: models/yolo26m_human.engine
+    detection_confidence_threshold: 0.4
+    max_track_age_sec: 1.0
+    association_distance_gate: 2.0
+    kalman.process_noise_std: 0.1
+    kalman.measurement_noise_std: 0.15
+    rgb_image_topic: /camera/color/image_raw
+    depth_image_topic: /camera/aligned_depth_to_color/image_raw
+    camera_info_topic: /camera/color/camera_info
+    sensor_qos: sensor_data
+    depth_sampling_radius: 5
+    camera_optical_frame: camera_color_optical_frame
+    map_frame: map
+    require_depth_alignment: true
+prediction_node:
+  ros__parameters:
+    engine_path: models/lstm_predictor_v1_on_lstm_dataset_v1.engine
+    normalization_stats_path: models/normalization_stats.json
+    L: 8
+    H: 12
+    f_lstm_hz: 8.0
+    uncertainty_window_W: 20
+    sigma_growth_rate_beta: 0.05
+    sigma_max: 0.5
+    max_track_age_sec: 1.0
+context_node:
+  ros__parameters:
+    d0: 3.0
+    v_max_ref: 1.5
+    epsilon: 0.001
+    sigma_max: 0.5
+    weights.w_d: 1.2
+    weights.w_v: 0.8
+    weights.w_theta: 0.6
+    weights.w_u: 1.0
+    weights.b: -0.5
+    ema_filter.alpha: 0.7
+    dwell_time.T_dwell_cycles: 4
+    fallback_phi_on_dropout: 1.0
+    input_timeout_sec: 0.5
+adaptive_param_node:
+  ros__parameters:
+    d_safe0: 0.6
+    k_d: 0.8
+    v_x0: 1.0
+    v_y0: 0.8
+    omega_0: 1.2
+    k_x: 0.6
+    k_y: 0.5
+    k_omega: 0.7
+    v_x_min: 0.08
+    v_y_min: 0.06
+    omega_min: 0.1
+    Q0_diag: [5.0, 5.0, 2.0]
+    Qh_diag: [8.0, 8.0, 3.0]
+nmpc_controller_node:
+  ros__parameters:
+    solver_backend: casadi
+    horizon_N: 20
+    dt: 0.05
+    f_lstm_hz: 8.0
+    R_diag: [0.1, 0.1, 0.05]
+    Rd_diag: [0.05, 0.05, 0.02]
+    P_diag: [10.0, 10.0, 4.0]
+    w_h: 3.0
+    w_obstacle: 2.0
+    w_slack: 50.0
+    C_collision: 0.9
+    d0: 3.0
+    max_humans_in_solver: 6
+    timeout_hold_cycles: 3
+    odom_jump_pos_thresh_m: 0.30
+    odom_jump_yaw_thresh_rad: 0.35
+    safe_stop_decel_limit: 1.0
+    input_timeout_sec: 0.5
+    max_obstacle_samples: 64
+    obstacle_sigma: 0.35
+    solver_max_cpu_time_sec: 0.045

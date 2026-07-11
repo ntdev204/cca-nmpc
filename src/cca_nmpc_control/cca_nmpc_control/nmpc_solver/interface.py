@@ -9,7 +9,6 @@ Reference: docs/08_solver_design.md Section 6
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
 import numpy as np
 
 
@@ -128,6 +127,10 @@ class SolverInterface(ABC):
             adaptive_params: AdaptiveParamsInput with velocity caps, Q diagonal, and d_safe_per_human
         """
         pass
+
+    def set_obstacles(self, obstacle_points: np.ndarray) -> None:
+        """Update fixed-size differentiable obstacle samples in map coordinates."""
+        raise NotImplementedError("This solver backend does not implement obstacle cost")
 
     @abstractmethod
     def solve(self, x0: np.ndarray) -> SolveResult:

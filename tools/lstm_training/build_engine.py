@@ -24,6 +24,8 @@ def build_engine(
     engine_path: str | Path,
     fp16: bool = False,
     max_workspace_gb: float = 1.0,
+    sequence_length: int = 8,
+    max_batch_size: int = 16,
 ) -> Path:
     """Compile an ONNX model into a serialized TensorRT engine.
 
@@ -60,6 +62,18 @@ def build_engine(
     if fp16 and builder.platform_has_fast_fp16:
         config.set_flag(trt.BuilderFlag.FP16)
 
+    input_tensor = network.get_input(0)
+    if input_tensor.shape[0] == -1:
+        profile = builder.create_optimization_profile()
+        shape = (1, sequence_length, 4)
+        profile.set_shape(
+            input_tensor.name,
+            min=shape,
+            opt=(min(4, max_batch_size), sequence_length, 4),
+            max=(max_batch_size, sequence_length, 4),
+        )
+        config.add_optimization_profile(profile)
+
     serialized = builder.build_serialized_network(network, config)
     if serialized is None:
         raise RuntimeError("TensorRT engine build failed")
@@ -75,8 +89,13 @@ def main(argv=None) -> int:
     ap.add_argument("--engine", required=True)
     ap.add_argument("--fp16", action="store_true")
     ap.add_argument("--workspace-gb", type=float, default=1.0)
+    ap.add_argument("--sequence-length", type=int, default=8)
+    ap.add_argument("--max-batch-size", type=int, default=16)
     args = ap.parse_args(argv)
-    out = build_engine(args.onnx, args.engine, args.fp16, args.workspace_gb)
+    out = build_engine(
+        args.onnx, args.engine, args.fp16, args.workspace_gb,
+        args.sequence_length, args.max_batch_size,
+    )
     print(f"Built TensorRT engine: {out}")
     return 0
 

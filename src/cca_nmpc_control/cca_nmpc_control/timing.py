@@ -7,7 +7,7 @@ parameter_update / solver / publish / total_cycle, compared against dt.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

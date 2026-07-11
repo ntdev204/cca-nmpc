@@ -4,7 +4,7 @@
 Runtime inference uses a YOLO-style TensorRT ``.engine`` (built on the target
 GPU from the ONNX exported by tools.lstm_training — ONNX is only the build-time
 intermediate, never loaded at runtime). TensorRT is imported lazily so this
-module imports on machines without CUDA/TensorRT; unit tests use MockLSTMPredictor.
+module imports on machines without CUDA/TensorRT; normalization remains testable offline.
 
 The engine's I/O signature mirrors the ONNX export: input (batch, L, 4), output
 (batch, H, 4), channel order [x, y, vx, vy]. Normalization uses the FROZEN
@@ -51,31 +51,6 @@ class LSTMPredictorProtocol(Protocol):
         ...
 
 
-class MockLSTMPredictor:
-    """Deterministic constant-velocity predictor — no TensorRT dependency.
-
-    Extrapolates the last observed (x, y) using the last (vx, vy) over H steps
-    at ``dt``. Used for Windows unit tests and non-GPU smoke runs, exactly like
-    MockDetector in the perception package.
-    """
-
-    def __init__(self, horizon: int = 12, dt: float = 0.125) -> None:
-        if horizon < 1:
-            raise ValueError("horizon must be >= 1")
-        self._H = horizon
-        self._dt = dt
-
-    def predict(self, window: np.ndarray) -> np.ndarray:
-        window = np.asarray(window, np.float32)
-        if window.ndim != 2 or window.shape[1] != 4:
-            raise ValueError("window must be (L, 4)")
-        x, y, vx, vy = window[-1]
-        out = np.zeros((self._H, 4), dtype=np.float32)
-        for k in range(1, self._H + 1):
-            out[k - 1] = [x + vx * self._dt * k, y + vy * self._dt * k, vx, vy]
-        return out
-
-
 class TensorRtLSTMPredictor:
     """TensorRT ``.engine`` LSTM adapter with frozen normalization.
 
@@ -97,6 +72,8 @@ class TensorRtLSTMPredictor:
         self._mean, self._std = load_normalization(stats_path)
         self._H = horizon
         self._engine, self._context = self._load_engine(str(engine_path))
+        import pycuda.driver as cuda
+        self._stream = cuda.Stream()
 
     @staticmethod
     def _load_engine(engine_path: str):
@@ -105,8 +82,7 @@ class TensorRtLSTMPredictor:
             import tensorrt as trt
         except ImportError as exc:
             raise ImportError(
-                "tensorrt is not installed. Use MockLSTMPredictor on machines "
-                "without GPU/TensorRT."
+                "tensorrt is not installed on this deployment device."
             ) from exc
 
         logger = trt.Logger(trt.Logger.WARNING)
@@ -124,7 +100,13 @@ class TensorRtLSTMPredictor:
         """Normalize -> TensorRT inference -> denormalize to (H, 4)."""
         import pycuda.driver as cuda
 
-        norm = normalize_window(window, self._mean, self._std)
+        window = np.asarray(window, dtype=np.float32)
+        if window.ndim != 2 or window.shape[1] != 4:
+            raise ValueError("window must be (L, 4)")
+        origin = window[-1, :2].copy()
+        local_window = window.copy()
+        local_window[:, :2] -= origin
+        norm = normalize_window(local_window, self._mean, self._std)
         blob = np.ascontiguousarray(norm[np.newaxis, :, :].astype(np.float32))
 
         input_name = self._engine.get_tensor_name(0)
@@ -136,11 +118,13 @@ class TensorRtLSTMPredictor:
 
         d_in = cuda.mem_alloc(blob.nbytes)
         d_out = cuda.mem_alloc(host_out.nbytes)
-        cuda.memcpy_htod(d_in, blob)
+        cuda.memcpy_htod_async(d_in, blob, self._stream)
         self._context.set_tensor_address(input_name, int(d_in))
         self._context.set_tensor_address(output_name, int(d_out))
-        self._context.execute_async_v3(stream_handle=cuda.Stream().handle)
-        cuda.memcpy_dtoh(host_out, d_out)
+        self._context.execute_async_v3(stream_handle=self._stream.handle)
+        cuda.memcpy_dtoh_async(host_out, d_out, self._stream)
+        self._stream.synchronize()
 
-        pred = host_out[0]                       # (H, 4)
-        return denormalize(pred, self._mean, self._std)
+        pred = denormalize(host_out[0], self._mean, self._std)
+        pred[:, :2] += origin
+        return pred

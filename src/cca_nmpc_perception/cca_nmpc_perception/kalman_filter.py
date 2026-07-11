@@ -13,6 +13,11 @@ class KalmanTrack:
     state: np.ndarray = field(default_factory=lambda: np.zeros(4))       # [x, y, vx, vy]
     covariance: np.ndarray = field(default_factory=lambda: np.eye(4))    # 4x4 P matrix
     last_update_time: float = 0.0  # seconds (monotonic)
+    last_measurement_time: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.last_measurement_time is None:
+            self.last_measurement_time = self.last_update_time
 
 
 def make_kalman_matrices(
@@ -31,7 +36,8 @@ def make_kalman_matrices(
 def predict(
     track: KalmanTrack,
     dt: float,
-    Q: np.ndarray
+    Q: np.ndarray,
+    target_time: float
 ) -> KalmanTrack:
     """Constant-velocity prediction step.
 
@@ -39,9 +45,10 @@ def predict(
         track: Current track state
         dt: Time delta in seconds
         Q: Process noise covariance (4x4)
+        target_time: Target timestamp for prediction (seconds)
 
     Returns:
-        New KalmanTrack with predicted state and covariance
+        New KalmanTrack with predicted state and covariance at target_time
     """
     F = np.array([[1, 0, dt, 0],
                   [0, 1, 0, dt],
@@ -54,7 +61,8 @@ def predict(
     return KalmanTrack(
         state=predicted_state,
         covariance=predicted_cov,
-        last_update_time=track.last_update_time
+        last_update_time=target_time,
+        last_measurement_time=track.last_measurement_time,
     )
 
 
@@ -89,5 +97,6 @@ def update(
     return KalmanTrack(
         state=updated_state,
         covariance=updated_cov,
-        last_update_time=timestamp
+        last_update_time=timestamp,
+        last_measurement_time=timestamp,
     )

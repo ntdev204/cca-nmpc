@@ -12,6 +12,7 @@ class Track:
     track_id: int
     kalman: KalmanTrack
     confidence: float = 1.0
+    is_observed: bool = True
 
     @property
     def position(self) -> tuple[float, float]:
@@ -68,9 +69,10 @@ class TrackManager:
 
         # Predict all tracks to current time
         for track in self._tracks:
+            track.is_observed = False
             dt = current_time - track.kalman.last_update_time
             if dt > 0:
-                track.kalman = predict(track.kalman, dt, self._Q)
+                track.kalman = predict(track.kalman, dt, self._Q, current_time)
 
         # Associate measurements to tracks
         if positions and self._tracks:
@@ -86,6 +88,7 @@ class TrackManager:
                 track.kalman, measurement, self._H, self._R, current_time
             )
             track.confidence = confidences[meas_idx]
+            track.is_observed = True
 
         # Create new tracks for unassociated measurements
         associated_meas = set(associations.keys())
@@ -139,7 +142,8 @@ class TrackManager:
         kalman = KalmanTrack(
             state=np.array([x, y, 0.0, 0.0], dtype=float),
             covariance=np.eye(4),
-            last_update_time=timestamp
+            last_update_time=timestamp,
+            last_measurement_time=timestamp,
         )
         track = Track(
             track_id=self._next_track_id, kalman=kalman, confidence=confidence
@@ -151,7 +155,8 @@ class TrackManager:
         """Remove tracks not updated within max_track_age_sec."""
         self._tracks = [
             track for track in self._tracks
-            if (current_time - track.kalman.last_update_time) <= self._max_track_age_sec
+            if (current_time - float(track.kalman.last_measurement_time))
+            <= self._max_track_age_sec
         ]
 
     def get_tracks(self) -> list[Track]:

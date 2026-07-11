@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'perception_node = cca_nmpc_perception.perception_node:main',
+            'human_trajectory_logger = cca_nmpc_perception.trajectory_logger:main',
         ],
     },
 )

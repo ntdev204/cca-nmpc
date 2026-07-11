@@ -18,7 +18,7 @@ perception_node:
 
     # Camera topics — defaults match Astra driver (astra.launch.xml), namespaced under /camera
     rgb_image_topic: "/camera/color/image_raw"
-    depth_image_topic: "/camera/depth/image_raw"     # or aligned depth-to-color topic
+    depth_image_topic: "/camera/aligned_depth_to_color/image_raw"  # aligned depth-to-color (matches require_depth_alignment: true)
     camera_info_topic: "/camera/color/camera_info"
 
     # QoS — sensor topics use best-effort SensorDataQoS to match Astra publisher (color_qos/depth_qos: "default")
@@ -35,7 +35,3 @@ perception_node:
     # Depth alignment requirement — Astra driver defaults to depth_registration:=false
     # Either launch with depth_registration:=true (hardware D2C) or subscribe to aligned depth-to-color topic
     require_depth_alignment: true
-
-    # Mock detector — set true for non-GPU dev / smoke tests. Skips TensorRT
-    # engine-file validation and uses a deterministic MockDetector.
-    use_mock_detector: false

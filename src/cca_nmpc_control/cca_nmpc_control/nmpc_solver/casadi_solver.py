@@ -32,6 +32,7 @@ from .interface import (
 )
 from . import ocp_spec
 from . import dummy_humans
+from .warm_start import shift_and_append_controls, repropagate_states
 
 
 class CasadiSolver(SolverInterface):
@@ -45,12 +46,17 @@ class CasadiSolver(SolverInterface):
         self._N = 0
         self._dt = 0.0
         self._M = 0  # max_humans_in_solver
+        self._f_lstm_hz = 8.0  # LSTM prediction frequency (Hz)
         self._r_diag = np.array([0.1, 0.1, 0.05])
         self._rd_diag = np.array([0.05, 0.05, 0.02])
         self._p_diag = np.array([10.0, 10.0, 4.0])
         self._w_h = 3.0
         self._w_slack = 50.0
         self._d0 = 3.0
+        self._w_obstacle = 2.0
+        self._obstacle_sigma = 0.35
+        self._max_obstacles = 64
+        self._max_cpu_time = 0.0
         # runtime inputs
         self._ref: dict | None = None
         self._human_slots: list | None = None
@@ -60,6 +66,7 @@ class CasadiSolver(SolverInterface):
         self._vx_max = 1.0
         self._vy_max = 0.8
         self._omega_max = 1.2
+        self._obstacles = np.empty((0, 2), dtype=float)
         # warm start + diagnostics
         self._z_warm: np.ndarray | None = None
         self._last_diag = SolverDiagnostics(0, 0.0, "n/a", 0.0, 0.0)
@@ -70,12 +77,17 @@ class CasadiSolver(SolverInterface):
         self._N = int(params["horizon_N"])
         self._dt = float(params["dt"])
         self._M = int(params["max_humans_in_solver"])
+        self._f_lstm_hz = float(params.get("f_lstm_hz", 8.0))
         self._r_diag = np.asarray(params.get("R_diag", self._r_diag), float)
         self._rd_diag = np.asarray(params.get("Rd_diag", self._rd_diag), float)
         self._p_diag = np.asarray(params.get("P_diag", self._p_diag), float)
         self._w_h = float(params.get("w_h", self._w_h))
         self._w_slack = float(params.get("w_slack", self._w_slack))
         self._d0 = float(params.get("d0", self._d0))
+        self._w_obstacle = float(params.get("w_obstacle", self._w_obstacle))
+        self._obstacle_sigma = float(params.get("obstacle_sigma", self._obstacle_sigma))
+        self._max_obstacles = int(params.get("max_obstacle_samples", self._max_obstacles))
+        self._max_cpu_time = float(params.get("solver_max_cpu_time_sec", 0.0))
         if self._N < 1 or self._dt <= 0 or self._M < 1:
             raise ValueError("horizon_N, dt, max_humans_in_solver must be positive")
 
@@ -100,6 +112,7 @@ class CasadiSolver(SolverInterface):
         P_hy = ca.MX.sym("P_hy", N + 1, M)
         P_phi = ca.MX.sym("P_phi", M)
         P_dsafe = ca.MX.sym("P_dsafe", M)
+        P_obs = ca.MX.sym("P_obs", 3, self._max_obstacles)  # x, y, active
 
         g = [X[:, 0] - P_x0]           # initial-state equality
         J = ca.MX(0)
@@ -116,30 +129,46 @@ class CasadiSolver(SolverInterface):
                 J += ocp_spec.build_human_hinge_cost_stage(
                     X[:, k], P_hx[k, j], P_hy[k, j], P_phi[j], self._d0, self._w_h
                 )
+            for j in range(self._max_obstacles):
+                squared_distance = (
+                    (X[0, k] - P_obs[0, j]) ** 2
+                    + (X[1, k] - P_obs[1, j]) ** 2
+                )
+                J += (
+                    self._w_obstacle * P_obs[2, j]
+                    * ca.exp(-squared_distance / (2.0 * self._obstacle_sigma ** 2))
+                )
             g.append(f(x=X[:, k], u=U[:, k])["x_next"] - X[:, k + 1])
 
         # terminal cost
         J += ocp_spec.build_terminal_cost(X[:, N] - P_ref[:, N], self._p_diag)
 
-        # per-human soft constraint at terminal stage + slack penalty
+        # slack penalty: one per human slot (not per stage)
         for j in range(M):
             J += ocp_spec.build_soft_constraint_slack_cost(S[j], self._w_slack)
-            g.append(
-                ocp_spec.build_soft_human_constraint(
-                    X[:, N], P_hx[N, j], P_hy[N, j], S[j], P_dsafe[j]
+
+        # safety constraint at ALL stages k=0..N (Eq. 12.3, per-horizon)
+        for k in range(N + 1):
+            for j in range(M):
+                g.append(
+                    ocp_spec.build_soft_human_constraint(
+                        X[:, k], P_hx[k, j], P_hy[k, j], S[j], P_dsafe[j]
+                    )
                 )
-            )
 
         z = ca.vertcat(ca.reshape(X, -1, 1), ca.reshape(U, -1, 1), S)
         p = ca.vertcat(
             P_x0, ca.reshape(P_ref, -1, 1), P_q,
             ca.reshape(P_hx, -1, 1), ca.reshape(P_hy, -1, 1), P_phi, P_dsafe,
+            ca.reshape(P_obs, -1, 1),
         )
         nlp = {"x": z, "p": p, "f": J, "g": ca.vertcat(*g)}
         opts = {"ipopt.print_level": 0, "print_time": 0, "ipopt.sb": "yes"}
+        if self._max_cpu_time > 0.0:
+            opts["ipopt.max_cpu_time"] = self._max_cpu_time
         self._solver = ca.nlpsol("nmpc", "ipopt", nlp, opts)
         self._n_eq = nx * (N + 1)          # equality constraints
-        self._n_ineq = M                    # soft-human inequalities
+        self._n_ineq = M * (N + 1)         # soft-human inequalities (all stages)
 
     # --------------------------------------------------------------- setters
     def set_reference(self, ref_trajectory: dict) -> None:
@@ -178,6 +207,15 @@ class CasadiSolver(SolverInterface):
         )
         self._pending_d_safe = active
 
+    def set_obstacles(self, obstacle_points: np.ndarray) -> None:
+        points = np.asarray(obstacle_points, dtype=float)
+        if points.size == 0:
+            self._obstacles = np.empty((0, 2), dtype=float)
+            return
+        if points.ndim != 2 or points.shape[1] != 2:
+            raise ValueError("obstacle_points must have shape (K, 2)")
+        self._obstacles = points[: self._max_obstacles].copy()
+
     # ----------------------------------------------------------------- solve
     def solve(self, x0: np.ndarray) -> SolveResult:
         self._require_built()
@@ -189,7 +227,6 @@ class CasadiSolver(SolverInterface):
                 active, self._human_slots
             )
 
-        N, M, nx, nu = self._N, self._M, ocp_spec.NX, ocp_spec.NU
         x0 = np.asarray(x0, float).flatten()
 
         p = self._assemble_params(x0)
@@ -236,7 +273,7 @@ class CasadiSolver(SolverInterface):
 
     def _var_bounds(self) -> tuple[np.ndarray, np.ndarray]:
         """Box bounds on z: states free, controls |u|<=cap (Eq. 12.2), slack>=0."""
-        ns, nc, M = self._n_states(), self._n_controls(), self._M
+        ns, M = self._n_states(), self._M
         lbx = np.concatenate([
             np.full(ns, -ca.inf),
             np.tile([-self._vx_max, -self._vy_max, -self._omega_max], self._N),
@@ -258,10 +295,16 @@ class CasadiSolver(SolverInterface):
         for j, (_tid, x_hat, y_hat, phi_j) in enumerate(self._human_slots):
             xa = np.asarray(x_hat, float)
             ya = np.asarray(y_hat, float)
-            hx[:, j] = _fit_to_len(xa, N + 1)
-            hy[:, j] = _fit_to_len(ya, N + 1)
+            # Time-interpolate LSTM predictions onto NMPC grid
+            hx[:, j] = _interpolate_lstm_to_nmpc(xa, self._f_lstm_hz, self._dt, N + 1)
+            hy[:, j] = _interpolate_lstm_to_nmpc(ya, self._f_lstm_hz, self._dt, N + 1)
             phi[j] = float(phi_j)
         dsafe = np.asarray(self._d_safe_slots, float)
+        obstacles = np.zeros((3, self._max_obstacles), dtype=float)
+        count = min(len(self._obstacles), self._max_obstacles)
+        if count:
+            obstacles[:2, :count] = self._obstacles[:count].T
+            obstacles[2, :count] = 1.0
         return np.concatenate([
             x0,
             ref.flatten(order="F"),
@@ -270,13 +313,21 @@ class CasadiSolver(SolverInterface):
             hy.flatten(order="F"),
             phi,
             dsafe,
+            obstacles.flatten(order="F"),
         ])
 
     def _warm_start_vector(self, x0: np.ndarray) -> np.ndarray:
         if self._z_warm is not None and self._z_warm.size == (
             self._n_states() + self._n_controls() + self._M
         ):
-            return self._z_warm
+            ns = self._n_states()
+            controls = self._z_warm[ns:ns + self._n_controls()].reshape(
+                self._N, ocp_spec.NU
+            )
+            shifted = shift_and_append_controls(controls)
+            states = repropagate_states(x0, shifted, self._spec.integrate_numpy)
+            slacks = self._z_warm[ns + self._n_controls():]
+            return np.concatenate([states.reshape(-1), shifted.reshape(-1), slacks])
         # cold start: replicate x0 across states, zero controls/slack
         states = np.tile(x0, self._N + 1)
         return np.concatenate([
@@ -284,7 +335,7 @@ class CasadiSolver(SolverInterface):
         ])
 
     def _build_result(self, z, sol, stats, success, solve_ms, x0) -> SolveResult:
-        N, M, nx, nu = self._N, self._M, ocp_spec.NX, ocp_spec.NU
+        N, nx, nu = self._N, ocp_spec.NX, ocp_spec.NU
         ns = self._n_states()
         X = z[:ns].reshape(N + 1, nx)
         U = z[ns:ns + self._n_controls()].reshape(N, nu)
@@ -320,7 +371,14 @@ class CasadiSolver(SolverInterface):
     def _cost_breakdown(self, X, U, S) -> dict[str, float]:
         N = self._N
         ref = self._ref["array"]
-        track = ctrl = smooth = human = 0.0
+        # Interpolate each human's prediction onto NMPC time grid
+        fitted = [
+            (np.asarray(_interpolate_lstm_to_nmpc(np.asarray(x_hat, float), self._f_lstm_hz, self._dt, N + 1)),
+             np.asarray(_interpolate_lstm_to_nmpc(np.asarray(y_hat, float), self._f_lstm_hz, self._dt, N + 1)),
+             float(phi_j))
+            for (_tid, x_hat, y_hat, phi_j) in self._human_slots
+        ]
+        track = ctrl = smooth = human = obstacle = 0.0
         for k in range(N):
             e = X[k] - ref[:, k]
             track += float(e @ (self._q_diag * e))
@@ -328,10 +386,16 @@ class CasadiSolver(SolverInterface):
             if k > 0:
                 du = U[k] - U[k - 1]
                 smooth += float(du @ (self._rd_diag * du))
-            for j, (_tid, x_hat, y_hat, phi_j) in enumerate(self._human_slots):
+            for x_hat, y_hat, phi_j in fitted:
                 d = np.hypot(X[k, 0] - x_hat[k], X[k, 1] - y_hat[k])
                 hinge = max(0.0, self._d0 - d)
-                human += self._w_h * float(phi_j) * hinge ** 2
+                human += self._w_h * phi_j * hinge ** 2
+            if len(self._obstacles):
+                d2 = np.sum((self._obstacles - X[k, :2]) ** 2, axis=1)
+                obstacle += float(np.sum(
+                    self._w_obstacle
+                    * np.exp(-d2 / (2.0 * self._obstacle_sigma ** 2))
+                ))
         eN = X[N] - ref[:, N]
         terminal = float(eN @ (self._p_diag * eN))
         slack_pen = float(self._w_slack * np.sum(np.square(S)))
@@ -339,17 +403,37 @@ class CasadiSolver(SolverInterface):
             "tracking_cost": track,
             "control_cost": ctrl,
             "smooth_cost": smooth,
-            "obstacle_cost": 0.0,
+            "obstacle_cost": obstacle,
             "human_cost": human + slack_pen,
             "terminal_cost": terminal,
         }
 
 
-def _fit_to_len(arr: np.ndarray, n: int) -> np.ndarray:
-    """Truncate or pad-with-last a 1D array to length n."""
-    if arr.size >= n:
-        return arr[:n]
-    if arr.size == 0:
-        return np.full(n, dummy_humans.DUMMY_D_J)
-    pad = np.full(n - arr.size, arr[-1])
-    return np.concatenate([arr, pad])
+def _interpolate_lstm_to_nmpc(
+    lstm_prediction: np.ndarray, f_lstm_hz: float, dt_nmpc: float, n_nmpc: int
+) -> np.ndarray:
+    """
+    Interpolate LSTM predictions (8Hz grid) onto NMPC time grid (20Hz).
+
+    Args:
+        lstm_prediction: H-length array from LSTM (e.g., x_hat or y_hat)
+        f_lstm_hz: LSTM prediction frequency (Hz), e.g., 8.0
+        dt_nmpc: NMPC timestep (s), e.g., 0.05
+        n_nmpc: Number of NMPC stages (N+1)
+
+    Returns:
+        n_nmpc-length array interpolated onto NMPC time grid.
+        If lstm_prediction is empty, returns dummy values.
+    """
+    if lstm_prediction.size == 0:
+        return np.full(n_nmpc, dummy_humans.DUMMY_D_J)
+
+    # LSTM time grid: [0, 1/f_lstm, 2/f_lstm, ..., (H-1)/f_lstm]
+    H = lstm_prediction.size
+    t_lstm = np.arange(H) / f_lstm_hz
+
+    # NMPC time grid: [0, dt_nmpc, 2*dt_nmpc, ..., (N)*dt_nmpc]
+    t_nmpc = np.arange(n_nmpc) * dt_nmpc
+
+    # Interpolate (extrapolate with edge values if t_nmpc extends beyond t_lstm)
+    return np.interp(t_nmpc, t_lstm, lstm_prediction)

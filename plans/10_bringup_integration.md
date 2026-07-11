@@ -6,7 +6,7 @@ Tie the CCA-NMPC packages together for launch and end-to-end runtime, per `docs/
 
 ## Environment Note
 
-- Windows, no ROS2: build the ROS-free end-to-end harness now (mock detector + recorded/synthetic human states → solver → cmd_vel), tested with `pytest`. Launch files are authored now and executed under ROS2 later.
+- Windows, no ROS2: build the ROS-free end-to-end harness now (recorded/synthetic human states → solver → cmd_vel), tested with `pytest`. Launch files are authored now and executed under ROS2 later.
 
 ## Project Type
 
@@ -39,7 +39,7 @@ src/cca_nmpc_bringup/
 
 tools/integration_harness/
 ├── __init__.py
-├── pipeline.py     # wires detector(mock)->states->prediction->context->adaptive->solver
+├── pipeline.py     # wires scenario states->prediction->context->adaptive->solver
 ├── run_harness.py  # CLI: synthetic/recorded input -> cmd_vel log
 └── tests/
     └── test_pipeline_e2e.py
@@ -60,7 +60,7 @@ VERIFY → keys match the docs 1:1; rate ordering holds.
 Agent: `backend-specialist`; skills: `python-patterns`, `clean-code`; priority: P1; dependencies: plans 01,04,05,06,07 core modules.
 
 INPUT → synthetic or recorded human states + robot odom + goal.
-OUTPUT → `pipeline.py` wires the ROS-free cores (mock detector → tracker/states → prediction → context → adaptive → solver) and emits `cmd_vel`.
+OUTPUT → `pipeline.py` wires scenario states → prediction → context → adaptive → solver and emits `cmd_vel`.
 VERIFY → `test_pipeline_e2e.py`: a scripted crossing scenario produces bounded `cmd_vel`, non-trivial `phi`, and no solver infeasibility.
 
 ### BR-03 — Full-stack launch
@@ -98,3 +98,16 @@ VERIFY → `git status` clean of stray artifacts; baseline committed on a dedica
 - Enforce rate ordering `f_NMPC >= f_context >= f_LSTM` in config and document it.
 - Keep large binaries (`.engine`, model files, datasets) out of git; reference by path/version.
 - Follow project convention: major changes on a dedicated `feature/*` branch.
+
+## Implementation Status (2026-07-11)
+
+- [x] BR-01: combined parameter file authored and aligned with the runtime TensorRT engine contract.
+- [x] BR-02: ROS-free integration harness and crossing-scenario tests pass on Windows.
+- [x] BR-03: bringup package and full-stack launch authored; ROS2 execution remains target-only verification.
+- [ ] BR-04: rosbag replay requires a recorded bag and ROS2 target runtime.
+- [x] BR-05: ignore rules cover generated Python, ROS build, model, engine, and dataset artifacts.
+
+The implementation deliberately does not invent a Semantic A* reference topic: the current docs
+describe `P_ref` conceptually but do not define its ROS topic/message contract. Likewise, the
+Nav2 costmap subscription and differentiable soft-cost adapter remain integration work because a
+raw `nav2_msgs/Costmap` grid cannot be inserted directly into the NLP described by `docs/08`.

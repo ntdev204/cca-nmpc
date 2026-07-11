@@ -7,7 +7,7 @@ list of (track_id, slack) — NOT a positional float array — matching SlackVal
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # Mirror NmpcDiagnostics LEVEL_* constants (ROS-free).
 LEVEL_OK = 0

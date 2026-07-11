@@ -16,7 +16,7 @@ def extract_windows(
     gap_segments: List[Tuple[int, int]],
     L: int,
     H: int,
-    max_gap_fraction: float = 0.3,
+    max_gap_fraction: float = 0.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Extract sliding windows from a resampled trajectory.
 
@@ -26,8 +26,8 @@ def extract_windows(
             from resample_trajectory.
         L: Input sequence length.
         H: Prediction horizon length.
-        max_gap_fraction: Discard windows if more than this fraction of
-            the window overlaps a gap segment.
+        max_gap_fraction: Discard windows if gap fraction exceeds this
+            threshold. Default 0.0 rejects any window crossing a gap.
 
     Returns:
         inputs: (N_windows, L, 4) array with channels [x, y, vx, vy].
@@ -64,8 +64,14 @@ def extract_windows(
         if gap_fraction > max_gap_fraction:
             continue
 
-        inp = data[i : i + L]
-        tgt = data[i + L : i + L + H]
+        inp = data[i : i + L].copy()
+        tgt = data[i + L : i + L + H].copy()
+        # Translation-invariant coordinates relative to the final observation.
+        # Velocities remain in the map-axis convention and predictions are
+        # translated back online after inference.
+        origin = inp[-1, :2].copy()
+        inp[:, :2] -= origin
+        tgt[:, :2] -= origin
         inputs_list.append(inp)
         targets_list.append(tgt)
 

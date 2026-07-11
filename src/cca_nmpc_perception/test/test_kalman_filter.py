@@ -47,7 +47,7 @@ class TestPredict:
             covariance=np.eye(4),
             last_update_time=0.0
         )
-        predicted = predict(track, dt=1.0, Q=Q)
+        predicted = predict(track, dt=1.0, Q=Q, target_time=1.0)
         # x = 1.0 + 0.5*1.0 = 1.5; y = 2.0 + (-0.5)*1.0 = 1.5
         assert abs(predicted.state[0] - 1.5) < 1e-9
         assert abs(predicted.state[1] - 1.5) < 1e-9
@@ -59,7 +59,7 @@ class TestPredict:
             covariance=np.eye(4),
             last_update_time=0.0
         )
-        predicted = predict(track, dt=0.5, Q=Q)
+        predicted = predict(track, dt=0.5, Q=Q, target_time=0.5)
         assert abs(predicted.state[2] - 2.0) < 1e-9
         assert abs(predicted.state[3] - (-1.0)) < 1e-9
 
@@ -67,7 +67,7 @@ class TestPredict:
         Q, _, _ = make_kalman_matrices(0.1, 0.15)
         original_state = np.array([1.0, 2.0, 0.1, 0.1])
         track = KalmanTrack(state=original_state.copy(), covariance=np.eye(4), last_update_time=0.0)
-        predicted = predict(track, dt=0.1, Q=Q)
+        predicted = predict(track, dt=0.1, Q=Q, target_time=0.1)
         # Original unchanged
         np.testing.assert_array_equal(track.state, original_state)
         assert predicted is not track
@@ -75,16 +75,16 @@ class TestPredict:
     def test_covariance_grows_with_nonzero_Q(self):
         Q, _, _ = make_kalman_matrices(0.5, 0.15)
         track = KalmanTrack(state=np.zeros(4), covariance=np.eye(4), last_update_time=0.0)
-        predicted = predict(track, dt=1.0, Q=Q)
+        predicted = predict(track, dt=1.0, Q=Q, target_time=1.0)
         # All diagonal elements should increase
         for i in range(4):
             assert predicted.covariance[i, i] > track.covariance[i, i]
 
-    def test_last_update_time_unchanged_after_predict(self):
+    def test_predict_advances_last_update_time_to_target_time(self):
         Q, _, _ = make_kalman_matrices(0.1, 0.15)
         track = KalmanTrack(state=np.zeros(4), covariance=np.eye(4), last_update_time=5.0)
-        predicted = predict(track, dt=1.0, Q=Q)
-        assert predicted.last_update_time == 5.0
+        predicted = predict(track, dt=1.0, Q=Q, target_time=6.0)
+        assert predicted.last_update_time == 6.0
 
 
 class TestUpdate:

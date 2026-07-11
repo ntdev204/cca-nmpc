@@ -15,7 +15,7 @@ perception_node:
       measurement_noise_std: 0.15 # R measurement noise
     # Topics — defaults match the Astra camera driver (astra.launch.xml), namespaced under /camera
     rgb_image_topic: "/camera/color/image_raw"
-    depth_image_topic: "/camera/depth/image_raw"
+    depth_image_topic: "/camera/aligned_depth_to_color/image_raw" # aligned depth-to-color (matches require_depth_alignment: true)
     camera_info_topic: "/camera/color/camera_info"
     # Sensor topics use best-effort SensorDataQoS to match the Astra publisher (color_qos/depth_qos: "default")
     sensor_qos: "sensor_data" # one of: sensor_data | reliable
@@ -30,13 +30,15 @@ perception_node:
 
 prediction_node:
   ros__parameters:
-    model_path: "models/lstm_predictor_v1_on_lstm_dataset_v1.onnx"
+    engine_path: "models/lstm_predictor_v1_on_lstm_dataset_v1.engine"
     normalization_stats_path: "models/normalization_stats.json"
     L: 8 # input sequence length, Eq. 6.1
     H: 12 # prediction horizon length, Eq. 6.2
     f_lstm_hz: 8.0 # f_LSTM, Section 13.1
     uncertainty_window_W: 20 # W in Eq. 6.3
     sigma_growth_rate_beta: 0.05 # beta in Eq. 13.3, sigma_h growth rate while a prediction is held stale between LSTM refreshes
+    sigma_max: 0.5
+    max_track_age_sec: 1.0
 
 context_node:
   ros__parameters:
@@ -77,6 +79,7 @@ nmpc_controller_node:
     solver_backend: "acados" # or "casadi"
     horizon_N: 20
     dt: 0.05 # control period [s] -> f_NMPC = 20 Hz
+    f_lstm_hz: 8.0 # source prediction grid used for NMPC time interpolation
     R_diag: [0.1, 0.1, 0.05] # control effort weight, Eq. 11.2
     Rd_diag: [0.05, 0.05, 0.02] # control smoothness weight, Eq. 11.2
     w_h: 3.0 # human-avoidance weight, Eq. 11.2
@@ -85,6 +88,10 @@ nmpc_controller_node:
     w_slack: 50.0 # slack penalty, Eq. 12.5
     C_collision: 0.9 # obstacle-cost collision threshold, Eq. 12.4
     max_humans_in_solver: 6 # cap on per-human constraints (Eq. 12.3) for real-time solve bound
+    input_timeout_sec: 0.5 # stale critical input causes safe stop
+    max_obstacle_samples: 64 # nearest occupied costmap cells in smooth obstacle cost
+    obstacle_sigma: 0.35 # Gaussian smoothing scale [m] for differentiable J_obstacle
+    solver_max_cpu_time_sec: 0.045 # backend-enforced deadline below dt=0.05
     # Real-time fallback / warm-start invalidation (Solver Design doc, Sections 5.2, 9)
     timeout_hold_cycles: 3 # max consecutive failed/late solves to hold previous control before safe-stop (Section 9)
     odom_jump_pos_thresh_m: 0.30 # position discontinuity between consecutive /odom beyond this -> reset() (Section 5.2)
