@@ -1,4 +1,3 @@
-"""Tests for EMA + dwell-time gate (Eqs. 12.6-12.7)."""
 from cca_nmpc_context.smoothing import PhiSmoother
 
 
@@ -14,19 +13,18 @@ def test_ema_converges():
     filt = 0.0
     for _ in range(30):
         filt, _used = sm.update(1, 1.0)
-    assert filt > 0.99  # converges toward the constant input
+    assert filt > 0.99
 
 
 def test_gate_holds_for_t_dwell_cycles():
-    # small alpha -> filtered tracks raw quickly; gate still holds used value
     sm = PhiSmoother(alpha=0.01, t_dwell_cycles=3)
-    sm.update(1, 0.2)          # seed -> used=0.2
-    _f, u1 = sm.update(1, 0.9)  # cycle 1: held
-    _f, u2 = sm.update(1, 0.9)  # cycle 2: held
-    _f, u3 = sm.update(1, 0.9)  # cycle 3: gate fires -> update
+    sm.update(1, 0.2)
+    _f, u1 = sm.update(1, 0.9)
+    _f, u2 = sm.update(1, 0.9)
+    _f, u3 = sm.update(1, 0.9)
     assert u1 == 0.2
     assert u2 == 0.2
-    assert u3 > 0.2  # updated after T_dwell cycles
+    assert u3 > 0.2
 
 
 def test_state_is_per_track():
@@ -35,7 +33,7 @@ def test_state_is_per_track():
     sm.update(2, 0.9)
     f1, _ = sm.update(1, 0.1)
     f2, _ = sm.update(2, 0.9)
-    assert f1 < f2  # independent state
+    assert f1 < f2
 
 
 def test_drop_forgets_track():

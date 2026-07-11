@@ -1,4 +1,3 @@
-"""Tests that the interface contract is satisfiable (SV-01)."""
 import numpy as np
 
 from cca_nmpc_control.nmpc_solver import (

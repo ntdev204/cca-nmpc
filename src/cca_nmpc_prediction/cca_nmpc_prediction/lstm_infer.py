@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-"""TensorRT LSTM inference with frozen normalization (Section 3.2).
-
-Runtime inference uses a YOLO-style TensorRT ``.engine`` (built on the target
-GPU from the ONNX exported by tools.lstm_training — ONNX is only the build-time
-intermediate, never loaded at runtime). TensorRT is imported lazily so this
-module imports on machines without CUDA/TensorRT; normalization remains testable offline.
-
-The engine's I/O signature mirrors the ONNX export: input (batch, L, 4), output
-(batch, H, 4), channel order [x, y, vx, vy]. Normalization uses the FROZEN
-train-split stats (never recomputed at runtime).
-"""
 from __future__ import annotations
 
 import json
@@ -20,7 +9,6 @@ import numpy as np
 
 
 def load_normalization(stats_path: str | Path) -> tuple[np.ndarray, np.ndarray]:
-    """Load frozen (mean, std) float32 arrays of length 4."""
     with open(stats_path) as f:
         stats = json.load(f)
     mean = np.asarray(stats["mean"], dtype=np.float32)
@@ -32,7 +20,6 @@ def load_normalization(stats_path: str | Path) -> tuple[np.ndarray, np.ndarray]:
 
 
 def normalize_window(window: np.ndarray, mean: np.ndarray, std: np.ndarray) -> np.ndarray:
-    """z-score a single (L, 4) window with frozen stats."""
     window = np.asarray(window, np.float32)
     if window.ndim != 2 or window.shape[1] != 4:
         raise ValueError("window must be (L, 4)")
@@ -40,24 +27,16 @@ def normalize_window(window: np.ndarray, mean: np.ndarray, std: np.ndarray) -> n
 
 
 def denormalize(pred: np.ndarray, mean: np.ndarray, std: np.ndarray) -> np.ndarray:
-    """Inverse z-score an (H, 4) prediction back to physical units."""
     return pred * std + mean
 
 
 class LSTMPredictorProtocol(Protocol):
-    """Predictor interface: (L,4) window -> (H,4) prediction in physical units."""
 
     def predict(self, window: np.ndarray) -> np.ndarray:
         ...
 
 
 class TensorRtLSTMPredictor:
-    """TensorRT ``.engine`` LSTM adapter with frozen normalization.
-
-    TensorRT/pycuda are imported lazily so this class only requires a GPU at
-    construction time. Raises a clear error on a missing/invalid engine before
-    the node spins, mirroring TensorRtYoloDetector.
-    """
 
     def __init__(
         self,
@@ -77,7 +56,6 @@ class TensorRtLSTMPredictor:
 
     @staticmethod
     def _load_engine(engine_path: str):
-        """Deserialize TensorRT engine and create an execution context."""
         try:
             import tensorrt as trt
         except ImportError as exc:
@@ -97,7 +75,6 @@ class TensorRtLSTMPredictor:
         return engine, context
 
     def predict(self, window: np.ndarray) -> np.ndarray:
-        """Normalize -> TensorRT inference -> denormalize to (H, 4)."""
         import pycuda.driver as cuda
 
         window = np.asarray(window, dtype=np.float32)

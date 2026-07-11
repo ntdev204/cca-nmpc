@@ -1,4 +1,3 @@
-"""Tests for per-track rolling buffers (Eq. 6.1)."""
 import numpy as np
 
 from cca_nmpc_prediction.track_buffer import TrackBufferManager
@@ -32,7 +31,7 @@ def test_evicts_stale():
     m = TrackBufferManager(L=2, max_age_sec=0.5)
     m.update(1, _s(0), 0.0)
     m.update(1, _s(1), 0.1)
-    m.prune(current_time=1.0)  # 0.9s > 0.5s max age
+    m.prune(current_time=1.0)
     assert 1 not in m.active_tracks()
 
 

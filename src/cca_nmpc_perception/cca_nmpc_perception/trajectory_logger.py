@@ -1,4 +1,3 @@
-"""ROS2 CSV logger for observed trajectories and reproducibility metadata."""
 from __future__ import annotations
 
 import csv

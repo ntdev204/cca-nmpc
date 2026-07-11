@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
-"""Real-time fallback / timeout state machine (Solver Design Sections 6.2, 9).
-
-Pure Python, ROS-free. Decides what control the robot publishes when a solve
-fails or is late:
-  success            -> publish computed u0            (FALLBACK_NONE)
-  recent solution    -> hold previous control          (FALLBACK_HELD_PREVIOUS)
-    (bounded by timeout_hold_cycles)
-  exhausted holds    -> safe-stop decelerating ramp     (FALLBACK_SAFE_STOP)
-
-Fallback codes mirror NmpcDiagnostics FALLBACK_* constants.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 
-# Mirror NmpcDiagnostics FALLBACK_* constants (kept local to stay ROS-free).
 FALLBACK_NONE = 0
 FALLBACK_SOLVER_FAILED = 1
 FALLBACK_TIMEOUT = 2
@@ -26,21 +14,16 @@ FALLBACK_SAFE_STOP = 4
 
 @dataclass
 class FallbackDecision:
-    u: np.ndarray               # control to publish [vx, vy, omega]
+    u: np.ndarray
     fallback_triggered: bool
     fallback_code: int
     fallback_reason: str
-    needs_reset: bool = False   # request solver.reset() (after safe stop)
+    needs_reset: bool = False
 
 
 def safe_stop_ramp(
     u_prev: np.ndarray, dt: float, decel_limit: float
 ) -> np.ndarray:
-    """Decelerate each component toward zero within decel_limit (Section 9).
-
-    Avoids an abrupt zero command at speed by bounding the per-cycle change to
-    ``decel_limit * dt`` in magnitude.
-    """
     u_prev = np.asarray(u_prev, float).flatten()
     max_step = max(0.0, decel_limit * dt)
     out = np.zeros_like(u_prev)
@@ -53,7 +36,6 @@ def safe_stop_ramp(
 
 
 class FallbackController:
-    """Tracks consecutive failures and produces a FallbackDecision each cycle."""
 
     def __init__(self, timeout_hold_cycles: int, dt: float, decel_limit: float):
         if timeout_hold_cycles < 0:
@@ -77,7 +59,6 @@ class FallbackController:
         )
 
     def on_failure(self, *, timed_out: bool) -> FallbackDecision:
-        """Handle a failed/late solve; escalate after timeout_hold_cycles."""
         self._consecutive_fail += 1
         base_code = FALLBACK_TIMEOUT if timed_out else FALLBACK_SOLVER_FAILED
 
@@ -93,7 +74,6 @@ class FallbackController:
                 ),
             )
 
-        # exhausted holds -> safe-stop ramp + request reset
         ramp = safe_stop_ramp(self._last_cmd, self._dt, self._decel)
         self._last_cmd = ramp
         return FallbackDecision(

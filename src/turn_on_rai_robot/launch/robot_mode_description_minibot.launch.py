@@ -98,13 +98,6 @@ def generate_launch_description():
     
     
     ld = LaunchDescription()
-
-    
-    
-
-    
-
-    
     ld.add_action(r3s_mec_)
     ld.add_action(r3s_4wd_)
       

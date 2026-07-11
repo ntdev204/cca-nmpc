@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Gazebo simulation launch for mini_mec robot (no real hardware serial).
-
-LIMITATION (P2.1 / review_3): URDF uses libgazebo_ros_diff_drive.so as a
-differential-drive approximation for smoke-test only. CCA-NMPC control is
-holonomic Mecanum u=[vx, vy, omega] and the controller publishes
-cmd_vel.linear.y, but diff_drive ignores linear.y. Do NOT use this launch
-as a Mecanum lateral-motion validation result. Replace with a true mecanum/
-omni plugin before control-accuracy claims.
-"""
 
 import os
 from pathlib import Path
@@ -31,7 +22,6 @@ def generate_launch_description():
 
     imu_config = Path(bringup_dir, "config", "imu.yaml")
 
-    # Launch Gazebo with world
     gazebo_server = ExecuteProcess(
         cmd=["gzserver", "-s", "libgazebo_ros_init.so", "-s", "libgazebo_ros_factory.so", str(world_file)],
         output="screen",
@@ -42,7 +32,6 @@ def generate_launch_description():
         output="screen",
     )
 
-    # Spawn robot in Gazebo
     spawn_robot = launch_ros.actions.Node(
         package="gazebo_ros",
         executable="spawn_entity.py",
@@ -62,7 +51,6 @@ def generate_launch_description():
         parameters=[{"robot_description": robot_description}],
     )
 
-    # Static TFs (same as real bringup)
     base_to_link = launch_ros.actions.Node(
         package="tf2_ros",
         executable="static_transform_publisher",
@@ -77,21 +65,18 @@ def generate_launch_description():
         arguments=["0", "0", "0", "0", "0", "0", "base_footprint", "gyro_link"],
     )
 
-    # Joint state publisher
     joint_state_publisher = launch_ros.actions.Node(
         package="joint_state_publisher",
         executable="joint_state_publisher",
         name="joint_state_publisher",
     )
 
-    # IMU filter
     imu_filter = launch_ros.actions.Node(
         package="imu_filter_madgwick",
         executable="imu_filter_madgwick_node",
         parameters=[str(imu_config)],
     )
 
-    # EKF (same as real robot)
     robot_ekf = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(launch_dir, "rai_ekf.launch.py")),
         launch_arguments={"carto_slam": "false"}.items(),

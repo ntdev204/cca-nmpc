@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""PerceptionNode: synchronized RGB/depth/camera_info callback pipeline.
-
-Detects humans with YOLO, projects to 3D optical frame, transforms to map,
-tracks with Kalman filter, publishes HumanStateArray.
-"""
 import time
 import rclpy
 from rclpy.node import Node
@@ -28,15 +23,12 @@ class PerceptionNode(Node):
         self._declare_and_load_params()
         self._validate_params()
 
-        # Build detector
         self._detector = self._build_detector()
 
-        # TF
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
         self._frame_transformer = FrameTransformer(self._tf_buffer)
 
-        # Tracker
         self._tracker = TrackManager(
             process_noise_std=self.process_noise_std,
             measurement_noise_std=self.measurement_noise_std,
@@ -44,13 +36,10 @@ class PerceptionNode(Node):
             max_track_age_sec=self.max_track_age_sec
         )
 
-        # Publisher
         self._pub = self.create_publisher(HumanStateArray, '/human_states', 10)
 
-        # cv_bridge
         self._bridge = cv_bridge.CvBridge()
 
-        # Synchronized subscribers
         self._rgb_sub = message_filters.Subscriber(self, Image, self.rgb_image_topic, qos_profile=qos_profile_sensor_data)
         self._depth_sub = message_filters.Subscriber(self, Image, self.depth_image_topic, qos_profile=qos_profile_sensor_data)
         self._info_sub = message_filters.Subscriber(self, CameraInfo, self.camera_info_topic, qos_profile=qos_profile_sensor_data)
@@ -115,7 +104,6 @@ class PerceptionNode(Node):
                 raise ValueError(f'Depth topic must indicate alignment: {self.depth_image_topic}')
 
     def _build_detector(self):
-        """Build the explicitly selected detector; production never falls back."""
         detector = TensorRtYoloDetector(
             self.yolo_engine_path,
             self.detection_confidence_threshold
@@ -129,10 +117,8 @@ class PerceptionNode(Node):
         depth_msg: Image,
         info_msg: CameraInfo
     ) -> None:
-        """Synchronized callback: detect → project → transform → track → publish."""
         t_start = time.monotonic()
 
-        # Convert ROS images to numpy
         try:
             rgb_image = self._bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
             depth_image = self._bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
@@ -142,11 +128,9 @@ class PerceptionNode(Node):
 
         t_decode = time.monotonic()
 
-        # Detect humans
         raw_detections = self._detector.detect(rgb_image)
         t_detect = time.monotonic()
 
-        # Project to 3D in optical frame, then transform to map
         stamp = rgb_msg.header.stamp
         ros_time = rclpy.time.Time.from_msg(stamp)
         measurements: list[tuple[float, float, float]] = []
@@ -167,7 +151,6 @@ class PerceptionNode(Node):
             if point_optical is None:
                 continue
 
-            # Transform to map frame
             point_map = self._frame_transformer.transform_point_to_map(
                 point_optical,
                 source_frame=info_msg.header.frame_id,
@@ -183,13 +166,11 @@ class PerceptionNode(Node):
 
         t_project = time.monotonic()
 
-        # Update tracker
         current_time = float(ros_time.nanoseconds) / 1e9
         active_tracks = self._tracker.update(measurements, current_time)
 
         t_track = time.monotonic()
 
-        # Build and publish HumanStateArray
         msg = HumanStateArray()
         msg.header.stamp = stamp
         msg.header.frame_id = self.map_frame

@@ -1,4 +1,3 @@
-"""Launch the CCA-NMPC context node with its parameter file."""
 import os
 
 from ament_index_python.packages import get_package_share_directory

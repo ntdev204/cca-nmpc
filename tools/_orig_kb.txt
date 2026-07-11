@@ -122,7 +122,7 @@ def main():
             key = get_key(settings)
             if key=='b':
                 print("Mecanum robot - always in OmniMode")
-            
+
             if key in moveBindings.keys():
                 x  = moveBindings[key][0]
                 y  = moveBindings[key][1]

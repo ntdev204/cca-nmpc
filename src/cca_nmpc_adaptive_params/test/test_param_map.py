@@ -1,4 +1,3 @@
-"""Tests for closed-form adaptive-parameter maps (Eqs. 10.1-10.3)."""
 from cca_nmpc_adaptive_params.param_map import (
     AdaptiveConfig, d_safe, saturated_velocity_limits, q_diag,
 )
@@ -15,7 +14,6 @@ CFG = AdaptiveConfig(
 def test_d_safe_linear():
     assert abs(d_safe(0.0, CFG) - 0.6) < 1e-9
     assert abs(d_safe(1.0, CFG) - 1.4) < 1e-9
-    # monotone increasing in phi
     assert d_safe(0.5, CFG) > d_safe(0.1, CFG)
 
 
@@ -28,13 +26,11 @@ def test_velocity_nominal_at_phi_zero():
 
 def test_velocity_respects_floor_at_phi_one():
     vx, vy, w = saturated_velocity_limits(1.0, CFG)
-    # v0 - k*1: 1.0-0.6=0.4, 0.8-0.5=0.3, 1.2-0.7=0.5 — all above floors
     assert abs(vx - 0.4) < 1e-9 and abs(vy - 0.3) < 1e-9 and abs(w - 0.5) < 1e-9
     assert vx >= CFG.v_x_min and vy >= CFG.v_y_min and w >= CFG.omega_min
 
 
 def test_velocity_floor_clamps_extreme():
-    # a huge k would drive below floor; ensure floor holds
     cfg = AdaptiveConfig(**{**CFG.__dict__, "k_x": 10.0})
     vx, _vy, _w = saturated_velocity_limits(1.0, cfg)
     assert vx == cfg.v_x_min

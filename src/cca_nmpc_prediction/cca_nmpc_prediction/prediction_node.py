@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""prediction_node: LSTM human-motion prediction (Architecture Section 3.2).
-
-Thin ROS glue over the pure cores (track_buffer, lstm_infer, uncertainty).
-Subscribes /human_states; on a timer at f_lstm_hz runs the ONNX LSTM for each
-ready track and publishes /human_predictions (HumanPredictionArray) and
-/human_pred_uncertainty (HumanUncertaintyArray), matched by track_id.
-
-sigma_h is refreshed once per LSTM cycle from realized-vs-predicted error
-(Eq. 6.3). Between refreshes, age() grows sigma_h with elapsed time
-(Eq. 13.3). Multiple /human_states callbacks between timer ticks do not
-re-score the same one-step prediction.
-"""
 from __future__ import annotations
 
 import numpy as np
@@ -39,11 +27,8 @@ class PredictionNode(Node):
         self._uncertainty = UncertaintyEstimator(
             self._W, self._beta, self._sigma_max)
         self._predictor = self._build_predictor()
-        # last one-step-ahead prediction per track, for Eq. 6.3 error
         self._last_pred1: dict[int, np.ndarray] = {}
-        # timestamp (sec) of most recent refresh() per track, for Eq. 13.3 age()
         self._last_refresh_time: dict[int, float] = {}
-        # guard: only first _on_states callback per LSTM cycle refreshes sigma_h
         self._refreshed_this_cycle: set[int] = set()
 
         self._sub = self.create_subscription(
@@ -57,7 +42,6 @@ class PredictionNode(Node):
 
     def _load_params(self) -> None:
         d = self.declare_parameter
-        # TensorRT serialized engine (built per target GPU from the ONNX export).
         d('engine_path', 'models/lstm_predictor_v1_on_lstm_dataset_v1.engine')
         d('normalization_stats_path', 'models/normalization_stats.json')
         d('L', 8)
@@ -79,7 +63,6 @@ class PredictionNode(Node):
         self._max_age = float(g('max_track_age_sec').value)
 
     def _build_predictor(self):
-        """Build the explicitly selected predictor; production never falls back."""
         predictor = TensorRtLSTMPredictor(
             self._engine_path, self._stats_path, horizon=self._H)
         self.get_logger().info('Using TensorRtLSTMPredictor')
@@ -89,9 +72,6 @@ class PredictionNode(Node):
         t = self.get_clock().now().nanoseconds / 1e9
         for h in msg.humans:
             state = np.array([h.x, h.y, h.vx, h.vy], float)
-            # Eq. 6.3: refresh once per LSTM cycle against the one-step-ahead
-            # prediction made last cycle. Extra state callbacks before the next
-            # timer tick must not re-score the same prediction (time-index bug).
             tid = h.track_id
             if tid in self._last_pred1 and tid not in self._refreshed_this_cycle:
                 p = self._last_pred1[tid]
@@ -114,7 +94,7 @@ class PredictionNode(Node):
 
         for tid in self._buffers.ready_tracks():
             window = self._buffers.get_window(tid)
-            pred = self._predictor.predict(window)     # (H, 4) physical
+            pred = self._predictor.predict(window)
             self._last_pred1[tid] = pred[0].copy()
 
             hp = HumanPrediction()
@@ -127,7 +107,6 @@ class PredictionNode(Node):
             hp.prediction_stamp = now.to_msg()
             pred_arr.predictions.append(hp)
 
-            # Eq. 13.3: grow sigma_h while held prediction ages between refreshes
             t_ref = self._last_refresh_time.get(tid)
             if t_ref is not None:
                 self._uncertainty.age(tid, now_sec - t_ref)
@@ -138,7 +117,6 @@ class PredictionNode(Node):
             hu.sigma_h_clipped = self._uncertainty.sigma_tilde(tid)
             unc_arr.uncertainties.append(hu)
 
-        # next state callbacks may refresh against the predictions just made
         self._refreshed_this_cycle.clear()
 
         self._pub_pred.publish(pred_arr)

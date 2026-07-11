@@ -1,4 +1,3 @@
-"""Tests for warm-start shift-and-append and invalidation (SV-05)."""
 import math
 
 import numpy as np
@@ -21,7 +20,7 @@ def test_repropagate_states_dynamically_consistent():
     u = np.tile([1.0, 0.0, 0.0], (4, 1))
     traj = ws.repropagate_states(x0, u, spec.integrate_numpy)
     assert traj.shape == (5, 3)
-    assert traj[-1, 0] > traj[0, 0]  # moved forward
+    assert traj[-1, 0] > traj[0, 0]
 
 
 def test_odom_jump_detection():

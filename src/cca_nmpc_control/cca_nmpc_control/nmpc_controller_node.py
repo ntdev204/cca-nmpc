@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""nmpc_controller_node: CCA-NMPC control loop (Architecture Section 3.5).
-
-Thin ROS glue over the (ROS-free) SolverInterface backend. Subscribes
-/adaptive_params, /human_predictions, /odom, /goal_pose; publishes /cmd_vel and
-/nmpc_diagnostics. Runs the solve loop with a wall-clock deadline and the
-fallback hierarchy (Solver Design Section 9), calling reset() on any warm-start
-invalidation trigger (Section 5.2). The node depends ONLY on SolverInterface —
-no backend branching here.
-"""
 from __future__ import annotations
 
 import math
@@ -92,8 +83,8 @@ class NmpcControllerNode(Node):
 
         self._latest_params: AdaptiveParams | None = None
         self._latest_pred: HumanPredictionArray | None = None
-        self._latest_humans: dict[int, tuple[float, float]] = {}  # track_id -> (x, y)
-        self._phi_by_track: dict[int, float] = {}   # per-human phi_j_used
+        self._latest_humans: dict[int, tuple[float, float]] = {}
+        self._phi_by_track: dict[int, float] = {}
         self._pose = (0.0, 0.0, 0.0)
         self._goal = None
         self._reference_path: Path | None = None
@@ -175,7 +166,6 @@ class NmpcControllerNode(Node):
         self._allow_empty_humans = bool(g('allow_empty_humans').value)
 
     def _build_solver(self):
-        """Construct the backend from YAML — node stays backend-agnostic."""
         if self._backend == 'acados':
             from .nmpc_solver.acados_solver import AcadosSolver
             solver = AcadosSolver()
@@ -184,7 +174,6 @@ class NmpcControllerNode(Node):
         solver.initialize(self._solver_params)
         return solver
 
-    # -------------------------------------------------------------- callbacks
     def _on_params(self, msg: AdaptiveParams) -> None:
         self._latest_params = msg
         self._mark_received('params')
@@ -200,9 +189,6 @@ class NmpcControllerNode(Node):
         self._mark_received('humans')
 
     def _on_context(self, msg: ContextIndexArray) -> None:
-        # Per-human gated phi_j feeds J_human weighting in the solver. Sourced
-        # from /context_index (the correct origin) — plan 08's subscription list
-        # omitted it; added here for J_human consistency (docs/plan gap).
         self._phi_by_track = {c.track_id: c.phi_j_used for c in msg.contexts}
         self._mark_received('context')
 
@@ -233,14 +219,6 @@ class NmpcControllerNode(Node):
         self._received_at[name] = time.monotonic()
 
     def _inputs_fresh(self) -> bool:
-        """Check required input freshness.
-
-        strict_runtime_mode=True (default): all topics required (full stack).
-        strict_runtime_mode=False: base topics always required; costmap /
-        reference_path / human-related topics gated by their require_* flags.
-        allow_empty_humans=True: drop predictions/humans/context freshness so
-        empty-scene / partial pipelines can still solve.
-        """
         now = time.monotonic()
         required: list[str] = ['params', 'odom']
         if self._strict_runtime_mode:
@@ -260,16 +238,14 @@ class NmpcControllerNode(Node):
             for name in required
         )
 
-    # ------------------------------------------------------------------ cycle
     def _on_cycle(self) -> None:
-        # Warm-start invalidation (Section 5.2) -> reset() before solving.
         events = self._invalidation.check(self._pose, self._goal)
         if events.any:
             self._solver.reset()
             self.get_logger().warn('warm-start invalidated -> solver.reset()')
 
         if self._latest_params is None or self._goal is None or not self._inputs_fresh():
-            self._publish_stop()          # no inputs yet -> safe default
+            self._publish_stop()
             return
 
         t_param0 = time.perf_counter()
@@ -312,7 +288,6 @@ class NmpcControllerNode(Node):
                 _resample_reference(self._reference_path, self._N + 1)
             )
         else:
-            # No reference path: hold current pose as flat reference (smoke-test).
             x, y, th = self._pose
             n = self._N + 1
             self._solver.set_reference({
@@ -332,9 +307,6 @@ class NmpcControllerNode(Node):
         if self._latest_pred is not None:
             candidates = []
             for hp in self._latest_pred.predictions:
-                # Conservative default phi_j=1.0 if context not yet seen for a
-                # tracked human (be MORE cautious under missing context, matching
-                # the dropout philosophy in Architecture Section 4).
                 phi_j = self._phi_by_track.get(hp.track_id, 1.0)
                 x_hat = np.asarray(hp.x_hat, float)
                 y_hat = np.asarray(hp.y_hat, float)
@@ -345,8 +317,6 @@ class NmpcControllerNode(Node):
                 candidates.append((risk, hp, phi_j, current))
             candidates.sort(key=lambda item: item[0], reverse=True)
             for _risk, hp, phi_j, current in candidates[:self._max_humans]:
-                # Prepend current human position to LSTM future predictions.
-                # Solver expects horizon length N+1 with current sample at index 0.
                 human_position_x_horizon = np.concatenate([[current[0]], np.asarray(hp.x_hat, float)])
                 human_position_y_horizon = np.concatenate([[current[1]], np.asarray(hp.y_hat, float)])
                 preds.append((hp.track_id, human_position_x_horizon, human_position_y_horizon, phi_j))
@@ -372,7 +342,7 @@ class NmpcControllerNode(Node):
         self._pub_cmd.publish(tw)
 
     def _publish_stop(self) -> None:
-        self._pub_cmd.publish(Twist())   # all-zero safe default
+        self._pub_cmd.publish(Twist())
 
     def _publish_diag(self, result, decision, solve_ms) -> None:
         cost = result.cost_breakdown if result else {}

@@ -45,8 +45,7 @@ def generate_launch_description():
         executable='imu_filter_madgwick_node',
         parameters=[imu_config]
     )
-    
-                           
+
     joint_state_publisher_node = launch_ros.actions.Node(
             package='joint_state_publisher', 
             executable='joint_state_publisher', 

@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-"""context_node: continuous context estimation (Architecture Section 3.3).
-
-Thin ROS glue over the pure modules (relative_motion, context_score, smoothing,
-aggregate). Subscribes /human_states, /human_predictions, /human_pred_uncertainty,
-/odom; publishes /context_index (ContextIndexArray).
-
-Geometric terms (Eqs. 7.1-7.5) are recomputed every cycle from the LATEST
-Kalman-filtered current state; only the predicted future trajectory is held
-between LSTM refreshes (Section 13.1). On perception/prediction dropout the used
-aggregate falls back to phi=1 (Architecture Section 4).
-"""
 from __future__ import annotations
 
 import math
@@ -33,7 +22,6 @@ from .aggregate import aggregate_context
 
 
 def _yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
-    """Extract yaw (theta_r) from a quaternion."""
     siny_cosp = 2.0 * (w * z + x * y)
     cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
     return math.atan2(siny_cosp, cosy_cosp)
@@ -47,10 +35,9 @@ class ContextNode(Node):
         self._smoother = PhiSmoother(self._alpha, self._t_dwell)
         self._weights = ContextWeights(**self._weight_dict)
 
-        # latest inputs
-        self._latest_states = None       # HumanStateArray
-        self._latest_uncert: dict[int, float] = {}   # track_id -> sigma_h_clipped
-        self._robot = (0.0, 0.0, 0.0, 0.0, 0.0)  # x,y,theta,vx,vy
+        self._latest_states = None
+        self._latest_uncert: dict[int, float] = {}
+        self._robot = (0.0, 0.0, 0.0, 0.0, 0.0)
         self._last_states_time = None
         self._last_pred_time = None
 
@@ -101,15 +88,11 @@ class ContextNode(Node):
         self._timeout = gp('input_timeout_sec').value
         self._rate_hz = gp('rate_hz').value
 
-    # -------------------------------------------------------------- callbacks
     def _on_states(self, msg: HumanStateArray) -> None:
         self._latest_states = msg
         self._last_states_time = self.get_clock().now()
 
     def _on_predictions(self, msg: HumanPredictionArray) -> None:
-        # Predicted future trajectory is held between LSTM refreshes; the node
-        # keeps the freshness stamp to detect dropout, geometric terms are
-        # recomputed from current states each cycle (Section 13.1).
         self._last_pred_time = self.get_clock().now()
 
     def _on_uncertainty(self, msg: HumanUncertaintyArray) -> None:
@@ -130,7 +113,6 @@ class ContextNode(Node):
         age = (self.get_clock().now() - self._last_states_time).nanoseconds / 1e9
         return age > self._timeout
 
-    # ------------------------------------------------------------------ cycle
     def _on_cycle(self) -> None:
         out = ContextIndexArray()
         out.header.stamp = self.get_clock().now().to_msg()
@@ -148,7 +130,6 @@ class ContextNode(Node):
                 rx, ry, rtheta, rvx, rvy,
                 h.x, h.y, h.vx, h.vy, epsilon=self._epsilon,
             )
-            # Missing uncertainty → fully uncertain (fail-safe; Eq. 8.3, sigma_tilde=1.0)
             sigma_tilde = self._latest_uncert.get(h.track_id, 1.0)
             z = context_score(
                 rm.d_h, rm.v_h_speed, rm.cos_dtheta,
@@ -172,7 +153,6 @@ class ContextNode(Node):
             d_list.append(rm.d_h)
             present.append(h.track_id)
 
-        # forget tracks no longer present
         for tid in self._smoother.active_tracks():
             if tid not in present:
                 self._smoother.drop(tid)
@@ -183,9 +163,7 @@ class ContextNode(Node):
         )
         out.phi_aggregate = agg.phi_aggregate
         out.phi_aggregate_used = agg.phi_aggregate_used
-        out.d_h_aggregate = (
-            0.0 if math.isinf(agg.d_h_aggregate) else agg.d_h_aggregate
-        )
+        out.d_h_aggregate = 0.0 if math.isinf(agg.d_h_aggregate) else agg.d_h_aggregate
         self._pub.publish(out)
 
 

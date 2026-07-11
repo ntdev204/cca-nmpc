@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Launch the Rai robot LSLiDAR N10P."""
 
 import os
 

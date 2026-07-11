@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-"""NmpcDiagnostics assembly helpers (Solver Design Sections 9, 11, 12).
-
-Pure Python, ROS-free. Produces a plain dataclass mirroring the NmpcDiagnostics
-message field-for-field; the node maps it onto the real message. slacks is a
-list of (track_id, slack) — NOT a positional float array — matching SlackValue[].
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Mirror NmpcDiagnostics LEVEL_* constants (ROS-free).
 LEVEL_OK = 0
 LEVEL_WARN = 1
 LEVEL_ERROR = 2
@@ -21,7 +14,7 @@ class DiagnosticsData:
     diagnostic_level: int
     solver_success: bool
     solve_time_ms: float
-    slacks: list[tuple[int, float]]        # (track_id, slack) per human
+    slacks: list[tuple[int, float]]
     num_humans_active: int
     cost_total: float
     cost_track: float
@@ -53,12 +46,6 @@ def build_diagnostics(
     fallback_code: int,
     fallback_reason: str = "",
 ) -> DiagnosticsData:
-    """Assemble diagnostics from a SolveResult-like set of inputs.
-
-    ``cost_breakdown`` uses the SolveResult keys (tracking_cost, control_cost,
-    smooth_cost, obstacle_cost, human_cost, terminal_cost); cost_total is their
-    sum (Eq. 11.1).
-    """
     cb = cost_breakdown
     track = cb.get("tracking_cost", 0.0)
     control = cb.get("control_cost", 0.0)

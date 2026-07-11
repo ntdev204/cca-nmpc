@@ -10,10 +10,10 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    
+
     use_rai_imu_declare = DeclareLaunchArgument(
         'use_rai_imu',
-        default_value='false',  
+        default_value='false',
         description='If true, use rai_imu'
     )
     declare_use_imu = LaunchConfiguration('use_rai_imu')

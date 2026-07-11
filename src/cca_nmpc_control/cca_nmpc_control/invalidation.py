@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""Warm-start invalidation detection (Solver Design Section 5.2).
-
-Pure Python, ROS-free. Stateful wrapper over the solver's pure trigger
-functions (nmpc_solver.warm_start) that remembers the previous odom/goal so the
-node can ask "should I reset() before the next solve?" each cycle. Reusing the
-solver's detectors avoids threshold drift between the two packages.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -36,7 +29,6 @@ class InvalidationEvents:
 
 
 class InvalidationDetector:
-    """Tracks previous odom/goal to detect Section 5.2 reset triggers."""
 
     def __init__(
         self,
@@ -55,7 +47,6 @@ class InvalidationDetector:
         robot_lifted: bool = False,
         map_relocalized: bool = False,
     ) -> InvalidationEvents:
-        """Evaluate reset triggers for this cycle and update stored state."""
         odom_jump = False
         if self._prev_pose is not None:
             odom_jump = detect_odom_jump(self._prev_pose, pose, self._thresh)
@@ -74,6 +65,5 @@ class InvalidationDetector:
         )
 
     def reset_history(self) -> None:
-        """Forget stored pose/goal (e.g. after a deliberate reset)."""
         self._prev_pose = None
         self._prev_goal = None

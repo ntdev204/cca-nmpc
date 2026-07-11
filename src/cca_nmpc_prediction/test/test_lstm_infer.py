@@ -1,10 +1,3 @@
-"""Tests for TensorRT LSTM inference wrapper + normalization (Section 3.2).
-
-Runtime inference uses a TensorRT .engine (GPU-only), so the GPU path is not
-exercised on Windows. These tests cover the ROS-free pieces: frozen-stat
-normalization round-trip and that the
-TensorRT adapter fails clearly without a valid engine.
-"""
 import json
 
 import numpy as np
@@ -44,7 +37,7 @@ def test_load_stats_rejects_wrong_channels(tmp_path):
 def test_zero_std_guarded(tmp_path):
     stats = _write_stats(tmp_path, [0.0] * 4, [0.0, 1.0, 1.0, 1.0])
     _mean, std = load_normalization(stats)
-    assert std[0] == 1.0  # zero std replaced by 1.0
+    assert std[0] == 1.0
 
 
 def test_normalize_rejects_bad_window(tmp_path):

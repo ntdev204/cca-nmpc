@@ -1,4 +1,3 @@
-"""Tests for the corrected context score (Eqs. 8.1-8.3)."""
 from cca_nmpc_context.context_score import (
     ContextWeights,
     sigmoid,
@@ -17,16 +16,12 @@ def test_sigmoid_bounds():
 
 
 def test_uncertainty_high_when_confidence_low():
-    # low confidence -> u_h near 1 (cautious)
     assert uncertainty_term(0.0, 0.0) == 1.0
-    # perfect confidence + zero uncertainty -> u_h = 0
     assert uncertainty_term(1.0, 0.0) == 0.0
-    # perfect confidence but max uncertainty -> u_h = 1
     assert uncertainty_term(1.0, 1.0) == 1.0
 
 
 def test_low_confidence_raises_phi():
-    # Corrected sign fix (Section 8): low confidence must RAISE phi.
     base = dict(d_h=2.0, v_h_speed=0.5, cos_dtheta=0.0, weights=W, d0=3.0, v_max_ref=1.5)
     phi_confident = context_index(confidence=1.0, sigma_h_tilde=0.0, **base)
     phi_uncertain = context_index(confidence=0.1, sigma_h_tilde=0.0, **base)

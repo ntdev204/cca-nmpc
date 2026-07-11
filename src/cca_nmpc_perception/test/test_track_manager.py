@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for track_manager.py (HP-06)."""
 
 import sys
 import os
@@ -56,7 +55,6 @@ class TestNewTrackCreation:
         manager.update([(0.0, 0.0)], current_time=0.0)
         manager.update([(10.0, 10.0)], current_time=0.1)
         tracks = manager.update([], current_time=0.2)
-        # Two tracks still alive, ids are 0 and 1
         ids = sorted(t.track_id for t in tracks)
         assert ids == [0, 1]
 
@@ -70,7 +68,7 @@ class TestAssociation:
 
         tracks_t1 = manager.update([(0.1, 0.1)], current_time=0.1)
         assert len(tracks_t1) == 1
-        assert tracks_t1[0].track_id == track_id  # same track, not new
+        assert tracks_t1[0].track_id == track_id
 
     def test_far_measurement_creates_new_track(self):
         manager = make_manager(association_distance_gate=1.0)
@@ -101,7 +99,7 @@ class TestStalePruning:
     def test_stale_track_removed_after_max_age(self):
         manager = make_manager(max_track_age_sec=0.5)
         manager.update([(0.0, 0.0)], current_time=0.0)
-        tracks = manager.update([], current_time=1.0)  # 1s > 0.5s max age
+        tracks = manager.update([], current_time=1.0)
         assert len(tracks) == 0
 
     def test_track_survives_within_max_age(self):
@@ -113,20 +111,17 @@ class TestStalePruning:
     def test_track_revived_by_measurement_resets_age(self):
         manager = make_manager(max_track_age_sec=0.5)
         manager.update([(0.0, 0.0)], current_time=0.0)
-        manager.update([(0.0, 0.0)], current_time=0.4)  # update resets last_update_time
+        manager.update([(0.0, 0.0)], current_time=0.4)
         tracks = manager.update([], current_time=0.8)
-        # 0.8 - 0.4 = 0.4 < 0.5 → still alive
         assert len(tracks) == 1
 
     def test_only_stale_tracks_removed(self):
         manager = make_manager(max_track_age_sec=0.5, association_distance_gate=0.5)
         manager.update([(0.0, 0.0), (10.0, 0.0)], current_time=0.0)
-        # Only update track near (0,0), let (10,0) go stale
         manager.update([(0.05, 0.0)], current_time=0.6)
         tracks = manager.update([(0.1, 0.0)], current_time=0.7)
         positions = [t.position for t in tracks]
         xs = [p[0] for p in positions]
-        # Only track near x=0 should remain
         assert all(x < 1.0 for x in xs)
         assert len(tracks) == 1
 
@@ -142,5 +137,4 @@ class TestUpdateReturnValues:
         manager = make_manager()
         result1 = manager.update([(1.0, 1.0)], current_time=0.0)
         result2 = manager.update([(1.1, 1.1)], current_time=0.1)
-        # Modifying result1 should not affect internal state
         assert result1 is not result2

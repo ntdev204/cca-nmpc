@@ -7,7 +7,6 @@ package_name = 'cca_nmpc_control'
 setup(
     name=package_name,
     version='0.1.0',
-    # include the inner package and its nmpc_solver subpackage
     packages=find_packages(exclude=['test', 'test.*']),
     data_files=[
         ('share/ament_index/resource_index/packages',

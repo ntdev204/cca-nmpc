@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Launch perception_node with parameter overrides.
-
-CRITICAL: Astra camera must publish aligned depth OR be launched with
-depth_registration:=true. Default Astra topics are NOT aligned.
-
-Example:
-  ros2 launch astra_camera astra.launch.py depth_registration:=true
-  ros2 launch cca_nmpc_perception human_perception.launch.py
-"""
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration

@@ -1,4 +1,3 @@
-"""End-to-end CasADi solve tests (SV-04, SV-06)."""
 import numpy as np
 
 from cca_nmpc_control.nmpc_solver import (
@@ -39,7 +38,6 @@ def test_solves_goal_ahead_no_human():
     s.set_adaptive_params(_adaptive([]))
     r = s.solve(np.array([0.0, 0.0, 0.0]))
     assert r.success
-    # should command forward motion toward the goal
     assert r.u0[0] > 0.0
     assert abs(r.u0[0]) <= 1.0 + 1e-6
     assert abs(r.u0[1]) <= 0.8 + 1e-6
@@ -52,7 +50,7 @@ def test_solves_goal_ahead_no_human():
 
 def test_velocity_bounds_respected():
     s, N, M = _make_solver()
-    s.set_reference(_straight_ref(N, 50.0, 0.0))  # far goal -> wants max speed
+    s.set_reference(_straight_ref(N, 50.0, 0.0))
     s.set_human_predictions([], [])
     s.set_adaptive_params(_adaptive([]))
     r = s.solve(np.array([0.0, 0.0, 0.0]))
@@ -63,7 +61,6 @@ def test_velocity_bounds_respected():
 def test_human_in_path_activates_avoidance_or_slack():
     s, N, M = _make_solver()
     s.set_reference(_straight_ref(N, 3.0, 0.0))
-    # human sitting right on the straight-line path at (1.5, 0)
     hx = np.full(N + 1, 1.5)
     hy = np.full(N + 1, 0.0)
     s.set_human_predictions([(1, hx, hy, 0.9)], [0.1])
@@ -71,7 +68,6 @@ def test_human_in_path_activates_avoidance_or_slack():
     r = s.solve(np.array([0.0, 0.0, 0.0]))
     assert r.success
     assert 1 in r.slacks
-    # human cost should be non-trivial since the direct path violates d_safe
     assert r.cost_breakdown["human_cost"] >= 0.0
 
 
@@ -79,12 +75,11 @@ def test_no_slack_when_human_far():
     s, N, M = _make_solver()
     s.set_reference(_straight_ref(N, 2.0, 0.0))
     hx = np.full(N + 1, 0.0)
-    hy = np.full(N + 1, 20.0)  # far away
+    hy = np.full(N + 1, 20.0)
     s.set_human_predictions([(2, hx, hy, 0.5)], [0.1])
     s.set_adaptive_params(_adaptive([HumanSafetyDistance(track_id=2, d_safe=0.8)]))
     r = s.solve(np.array([0.0, 0.0, 0.0]))
     assert r.success
-    # far human -> slack ~ 0
     assert r.slacks[2] < 1e-3
 
 
@@ -107,22 +102,14 @@ def test_diagnostics_populated():
     s.solve(np.array([0.0, 0.0, 0.0]))
     d = s.get_diagnostics()
     assert d.objective_value >= 0.0
-    assert d.constraint_violation < 1e-4  # dynamics equality satisfied
+    assert d.constraint_violation < 1e-4
 
 
 def test_obstacle_on_reference_path_raises_cost_and_deviates_trajectory():
-    """P2.5: obstacle at (1.5, 0) on straight x-axis reference must push
-    obstacle_cost above the no-obstacle baseline and deflect the planned
-    trajectory laterally (max |y| increases or lateral speed vy is non-zero).
-
-    Verifies the Gaussian soft obstacle cost (Eq. 11.2 J_obstacle) is active
-    in the NLP and changes the solver output when an obstacle blocks the path.
-    """
     N = 15
     ref = _straight_ref(N, 3.0, 0.0)
     x0 = np.array([0.0, 0.0, 0.0])
 
-    # Baseline: no obstacles
     s_base, _, _ = _make_solver(N=N)
     s_base.set_reference(ref)
     s_base.set_human_predictions([], [])
@@ -130,7 +117,6 @@ def test_obstacle_on_reference_path_raises_cost_and_deviates_trajectory():
     r_base = s_base.solve(x0)
     assert r_base.success
 
-    # With obstacle on path
     s_obs, _, _ = _make_solver(N=N)
     s_obs.set_reference(ref)
     s_obs.set_obstacles(np.array([[1.5, 0.0]]))
@@ -139,11 +125,8 @@ def test_obstacle_on_reference_path_raises_cost_and_deviates_trajectory():
     r_obs = s_obs.solve(x0)
     assert r_obs.success
 
-    # Obstacle cost must be strictly higher when obstacle is present
     assert r_obs.cost_breakdown["obstacle_cost"] > r_base.cost_breakdown["obstacle_cost"]
 
-    # Trajectory must deflect: either lateral y positions are pushed away from 0
-    # or the first lateral control command vy is non-negligible
     max_y_base = float(np.max(np.abs(r_base.trajectory["y"])))
     max_y_obs = float(np.max(np.abs(r_obs.trajectory["y"])))
     lateral_deflected = (max_y_obs > max_y_base + 1e-4) or (abs(r_obs.u0[1]) > 1e-4)

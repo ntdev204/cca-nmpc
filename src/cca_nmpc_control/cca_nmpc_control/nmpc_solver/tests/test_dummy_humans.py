@@ -1,4 +1,3 @@
-"""Tests for dummy-human slot filling (SV-03)."""
 import numpy as np
 
 from cca_nmpc_control.nmpc_solver import dummy_humans as dh
@@ -36,7 +35,7 @@ def test_build_d_safe_slots_matches_by_track_id():
     d_safe = dh.build_d_safe_slots({7: 1.2, 9: 0.8}, slots)
     assert d_safe[0] == 1.2
     assert d_safe[1] == 0.8
-    assert d_safe[2] == dh.DUMMY_D_SAFE  # dummy slot
+    assert d_safe[2] == dh.DUMMY_D_SAFE
 
 
 def test_dummy_never_logged_as_near_miss():

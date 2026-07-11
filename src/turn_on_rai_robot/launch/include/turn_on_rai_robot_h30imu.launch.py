@@ -8,13 +8,12 @@ from launch.substitutions import LaunchConfiguration
 import launch_ros.actions
 
 def generate_launch_description():
-    
+
     bringup_dir = get_package_share_directory('turn_on_rai_robot')
     launch_dir = os.path.join(bringup_dir, 'launch')
 
     imu_config = Path(get_package_share_directory('turn_on_rai_robot'), 'config', 'imu.yaml')
 
-    
     carto_slam = LaunchConfiguration('carto_slam', default='false')
     
     carto_slam_dec = DeclareLaunchArgument('carto_slam',default_value='false')
@@ -27,20 +26,9 @@ def generate_launch_description():
      
     robot_ekf = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(launch_dir, 'rai_ekf.launch.py')),
-            launch_arguments={'carto_slam':carto_slam}.items(),            
+            launch_arguments={'carto_slam':carto_slam}.items(),
     )
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
     base_to_link = launch_ros.actions.Node(
             package='tf2_ros', 
             executable='static_transform_publisher', 
@@ -59,18 +47,13 @@ def generate_launch_description():
         executable='imu_filter_madgwick_node',
         parameters=[imu_config]
     )
-    
-                           
+
     joint_state_publisher_node = launch_ros.actions.Node(
             package='joint_state_publisher', 
             executable='joint_state_publisher', 
             name='joint_state_publisher',
     )
-    
-    
-    
-    
-    
+
     minibot_type = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(launch_dir, 'robot_mode_description_minibot.launch.py')),
             launch_arguments={'mini_mec': 'true'}.items(),

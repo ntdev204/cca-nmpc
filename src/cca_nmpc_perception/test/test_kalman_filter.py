@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for kalman_filter.py (HP-06)."""
 import numpy as np
 
 import sys
@@ -47,12 +46,11 @@ class TestPredict:
             last_update_time=0.0
         )
         predicted = predict(track, dt=1.0, Q=Q, target_time=1.0)
-        # x = 1.0 + 0.5*1.0 = 1.5; y = 2.0 + (-0.5)*1.0 = 1.5
         assert abs(predicted.state[0] - 1.5) < 1e-9
         assert abs(predicted.state[1] - 1.5) < 1e-9
 
     def test_velocity_unchanged_in_constant_velocity_model(self):
-        Q, _, _ = make_kalman_matrices(0.0, 0.15)  # zero process noise for clean test
+        Q, _, _ = make_kalman_matrices(0.0, 0.15)
         track = KalmanTrack(
             state=np.array([0.0, 0.0, 2.0, -1.0]),
             covariance=np.eye(4),
@@ -67,7 +65,6 @@ class TestPredict:
         original_state = np.array([1.0, 2.0, 0.1, 0.1])
         track = KalmanTrack(state=original_state.copy(), covariance=np.eye(4), last_update_time=0.0)
         predicted = predict(track, dt=0.1, Q=Q, target_time=0.1)
-        # Original unchanged
         np.testing.assert_array_equal(track.state, original_state)
         assert predicted is not track
 
@@ -75,7 +72,6 @@ class TestPredict:
         Q, _, _ = make_kalman_matrices(0.5, 0.15)
         track = KalmanTrack(state=np.zeros(4), covariance=np.eye(4), last_update_time=0.0)
         predicted = predict(track, dt=1.0, Q=Q, target_time=1.0)
-        # All diagonal elements should increase
         for i in range(4):
             assert predicted.covariance[i, i] > track.covariance[i, i]
 
@@ -92,16 +88,15 @@ class TestUpdate:
         Q, R, H = make_kalman_matrices(0.1, 0.15)
         track = KalmanTrack(
             state=np.array([0.0, 0.0, 0.0, 0.0]),
-            covariance=np.eye(4) * 10,  # large initial uncertainty
+            covariance=np.eye(4) * 10,
             last_update_time=0.0
         )
         measurement = np.array([3.0, 4.0])
         updated = update(track, measurement, H, R, timestamp=1.0)
 
-        # State x,y should move toward measurement
         assert updated.state[0] > 0.0
         assert updated.state[1] > 0.0
-        assert updated.state[0] < 3.0  # not overshoot
+        assert updated.state[0] < 3.0
         assert updated.state[1] < 4.0
 
     def test_update_sets_timestamp(self):
@@ -122,13 +117,11 @@ class TestUpdate:
         Q, R, H = make_kalman_matrices(0.1, 0.15)
         track = KalmanTrack(state=np.zeros(4), covariance=np.eye(4) * 5, last_update_time=0.0)
         updated = update(track, np.array([0.0, 0.0]), H, R, timestamp=1.0)
-        # Position uncertainty (top-left 2x2) should shrink
         assert updated.covariance[0, 0] < track.covariance[0, 0]
         assert updated.covariance[1, 1] < track.covariance[1, 1]
 
     def test_perfect_measurement_at_state(self):
-        """Update with measurement exactly at predicted position: state should be ~unchanged."""
-        Q, R, H = make_kalman_matrices(0.01, 0.01)  # tight noises
+        Q, R, H = make_kalman_matrices(0.01, 0.01)
         track = KalmanTrack(
             state=np.array([5.0, 3.0, 0.0, 0.0]),
             covariance=np.eye(4) * 0.01,

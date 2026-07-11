@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""adaptive_param_node: map context index -> NMPC runtime params (Section 3.4).
-
-Thin ROS glue over param_map (Eqs. 10.1-10.3). Subscribes /context_index;
-publishes /adaptive_params. Uses the GATED aggregate phi_aggregate_used for
-global caps / Q (NOT the raw phi_aggregate), and each human's own phi_j_used for
-the per-human d_safe published in d_safe_per_human (matched by track_id) — the
-solver consumes those precomputed values directly (docs/08 §15.1).
-"""
 from __future__ import annotations
 
 import rclpy
@@ -58,20 +50,19 @@ class AdaptiveParamNode(Node):
         )
 
     def _on_context(self, msg: ContextIndexArray) -> None:
-        phi_used = msg.phi_aggregate_used            # gated aggregate
+        phi_used = msg.phi_aggregate_used
         vx, vy, omega = saturated_velocity_limits(phi_used, self._cfg)
 
         out = AdaptiveParams()
         out.header.stamp = self.get_clock().now().to_msg()
         out.header.frame_id = 'map'
-        out.d_safe_aggregate = d_safe(phi_used, self._cfg)   # monitoring only
+        out.d_safe_aggregate = d_safe(phi_used, self._cfg)
         out.vx_max = vx
         out.vy_max = vy
         out.omega_max = omega
-        out.q_diag = list(q_diag(phi_used, self._cfg))       # lowercase, len-3
+        out.q_diag = list(q_diag(phi_used, self._cfg))
         out.phi_aggregate_used = phi_used
 
-        # Per-human d_safe from each human's OWN gated phi_j_used (Eq. 9.3).
         for ci in msg.contexts:
             hsd = HumanSafetyDistance()
             hsd.track_id = ci.track_id

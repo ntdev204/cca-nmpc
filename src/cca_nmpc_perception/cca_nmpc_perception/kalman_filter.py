@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
-"""Constant-velocity Kalman filter for 2D human position tracking.
-
-State: [x, y, vx, vy]. Measurement: [x, y] in map frame.
-"""
 import numpy as np
 from dataclasses import dataclass, field
 
 
 @dataclass
 class KalmanTrack:
-    """Kalman filter state for a single track."""
-    state: np.ndarray = field(default_factory=lambda: np.zeros(4))       # [x, y, vx, vy]
-    covariance: np.ndarray = field(default_factory=lambda: np.eye(4))    # 4x4 P matrix
-    last_update_time: float = 0.0  # seconds (monotonic)
+    state: np.ndarray = field(default_factory=lambda: np.zeros(4))
+    covariance: np.ndarray = field(default_factory=lambda: np.eye(4))
+    last_update_time: float = 0.0
     last_measurement_time: float | None = None
 
     def __post_init__(self) -> None:
@@ -24,8 +19,6 @@ def make_kalman_matrices(
     process_noise_std: float,
     measurement_noise_std: float
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Build Q, R, H matrices from noise parameters."""
-    # Measurement matrix H: extract x,y from state
     H = np.array([[1, 0, 0, 0],
                   [0, 1, 0, 0]], dtype=float)
     Q = np.eye(4) * (process_noise_std ** 2)
@@ -39,17 +32,6 @@ def predict(
     Q: np.ndarray,
     target_time: float
 ) -> KalmanTrack:
-    """Constant-velocity prediction step.
-
-    Args:
-        track: Current track state
-        dt: Time delta in seconds
-        Q: Process noise covariance (4x4)
-        target_time: Target timestamp for prediction (seconds)
-
-    Returns:
-        New KalmanTrack with predicted state and covariance at target_time
-    """
     F = np.array([[1, 0, dt, 0],
                   [0, 1, 0, dt],
                   [0, 0, 1,  0],
@@ -73,19 +55,6 @@ def update(
     R: np.ndarray,
     timestamp: float
 ) -> KalmanTrack:
-    """Kalman update step with measurement [x, y].
-
-    Args:
-        track: Predicted track state
-        measurement: [x, y] measurement
-        H: Measurement matrix (2x4)
-        R: Measurement noise covariance (2x2)
-        timestamp: Current time in seconds
-
-    Returns:
-        New KalmanTrack with updated state and covariance
-    """
-    # Innovation
     y_innov = measurement - H @ track.state
     S = H @ track.covariance @ H.T + R
     K = track.covariance @ H.T @ np.linalg.inv(S)

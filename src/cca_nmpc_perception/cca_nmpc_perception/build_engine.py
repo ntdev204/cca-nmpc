@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""Build TensorRT .engine for human detection from YOLO weights.
-
-Usage:
-    python3 build_engine.py --weights path/to/weights.pt --output models/yolo26m_human.engine
-
-The output engine path defaults to models/yolo26m_human.engine to match
-docs/config (yolo_engine_path). Pass the actual weights via --weights;
-do not hard-code a model name here.
-
-Requirements:
-    - torch, ultralytics, tensorrt (pip install torch ultralytics)
-    - CUDA-capable GPU + matching TensorRT runtime
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -76,7 +62,6 @@ def main() -> int:
         print("ERROR: tensorrt not installed. Install TensorRT runtime for your CUDA version.", file=sys.stderr)
         return 1
 
-    # Ensure output directory exists
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"Loading YOLO weights: {args.weights}")
@@ -88,8 +73,6 @@ def main() -> int:
     print(f"  FP16: {args.fp16}")
     print(f"  Device: {args.device}")
 
-    # Export to TensorRT
-    # ultralytics export() API: https://docs.ultralytics.com/modes/export/
     model.export(
         format="engine",
         imgsz=args.imgsz,
@@ -97,10 +80,9 @@ def main() -> int:
         half=args.fp16,
         device=args.device,
         simplify=True,
-        workspace=4,  # GB
+        workspace=4,
     )
 
-    # ultralytics saves engine next to the weights file with .engine suffix
     expected_output = args.weights.with_suffix(".engine")
     if expected_output.exists() and expected_output != args.output:
         import shutil

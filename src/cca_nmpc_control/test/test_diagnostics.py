@@ -1,4 +1,3 @@
-"""Tests for NmpcDiagnostics assembly (Sections 9, 11, 12)."""
 from cca_nmpc_control.diagnostics import (
     build_diagnostics, LEVEL_OK, LEVEL_WARN, LEVEL_ERROR,
 )
