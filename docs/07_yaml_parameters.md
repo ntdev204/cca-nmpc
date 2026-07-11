@@ -76,7 +76,7 @@ adaptive_param_node:
 
 nmpc_controller_node:
   ros__parameters:
-    solver_backend: "acados" # or "casadi"
+    solver_backend: "casadi" # or "acados" (requires target platform acados toolchain)
     horizon_N: 20
     dt: 0.05 # control period [s] -> f_NMPC = 20 Hz
     f_lstm_hz: 8.0 # source prediction grid used for NMPC time interpolation
@@ -97,6 +97,16 @@ nmpc_controller_node:
     odom_jump_pos_thresh_m: 0.30 # position discontinuity between consecutive /odom beyond this -> reset() (Section 5.2)
     odom_jump_yaw_thresh_rad: 0.35 # heading discontinuity beyond this -> reset() (Section 5.2)
     safe_stop_decel_limit: 1.0 # max deceleration [m/s^2] for the safe-stop ramp (Section 9)
+    # Input-freshness mode (review_3 / P2.3).
+    # strict_runtime_mode=true (default/production): require all 7 topics
+    #   (params, odom, predictions, humans, context, reference, costmap).
+    # strict_runtime_mode=false: base topics (params, odom) always required;
+    #   costmap / reference_path / human topics gated by the flags below so
+    #   partial-pipeline and smoke-test runs can still solve.
+    strict_runtime_mode: true
+    require_costmap: true # only consulted when strict_runtime_mode=false
+    require_reference_path: true # only consulted when strict_runtime_mode=false
+    allow_empty_humans: false # true drops predictions/humans/context freshness
 
 calibration:
   ros__parameters:

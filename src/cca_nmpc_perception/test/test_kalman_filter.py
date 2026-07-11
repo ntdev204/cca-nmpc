@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Tests for kalman_filter.py (HP-06)."""
 import numpy as np
-import pytest
 
 import sys
 import os

@@ -25,7 +25,7 @@ These are kept separate because they serve different purposes: the LSTM dataset 
 | `track_id` | int | Persistent per-human ID from the tracker |
 | `x`, `y` | float64 (m) | Position in map frame |
 | `vx`, `vy` | float64 (m/s) | Velocity in map frame |
-| `c` | float64 [0,1] | Detection confidence at that timestep |
+| `confidence` | float64 [0,1] | Detection confidence at that timestep |
 
 ### 2.3 Preprocessing
 

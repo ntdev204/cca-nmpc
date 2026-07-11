@@ -148,7 +148,6 @@ def main():
     control_speed_x = 0.0
     control_speed_y = 0.0
     control_turn  = 0.0
-    Omni = 1
     try:
         print(msg)
         print(print_vels(speed, turn))

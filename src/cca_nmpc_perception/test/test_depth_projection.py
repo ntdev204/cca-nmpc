@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for depth_projection.py (HP-04)."""
+import pytest  # noqa: F401
 import numpy as np
-import pytest
 from unittest.mock import MagicMock
 from dataclasses import dataclass, field
 from typing import List
@@ -40,7 +40,7 @@ sys.modules['sensor_msgs.msg'].CameraInfo = CameraInfo
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cca_nmpc_perception'))
 
-from cca_nmpc_perception.depth_projection import Detection2D, project_detection_to_3d
+from cca_nmpc_perception.depth_projection import Detection2D, project_detection_to_3d  # noqa: E402
 
 
 def make_camera_info(fx=500.0, fy=500.0, cx=320.0, cy=240.0, width=640, height=480):

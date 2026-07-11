@@ -14,10 +14,10 @@ The solver module is designed against an abstract interface (Section 6) so the c
 
 **Supported backends:**
 
-- **CasADi + IPOPT** — general-purpose NLP solver, pure Python, fastest to iterate on during formulation development and debugging.
-- **acados + HPIPM** — code-generated, RTI-capable solver, used for the real-time deployment.
+- **CasADi + IPOPT** — general-purpose NLP solver, pure Python, fastest to iterate on during formulation development and debugging. **Current shipped implementation.**
+- **acados + HPIPM** — code-generated, RTI-capable solver. **Deferred: requires native acados toolchain on target Linux platform (codegen unavailable on Windows dev environment); use CasadiSolver on Windows.**
 
-**Implementation target: acados.** CasADi + IPOPT is retained as the reference/validation backend (Section 15, item 3) rather than being discarded after prototyping — having two independent numerical implementations of the same OCP is directly useful for catching formulation-drift bugs, not just a development convenience.
+**Current implementation: CasADi/IPOPT reference.** acados remains a deferred target platform backend pending availability of the native codegen toolchain on deployment Linux. The CasADi + IPOPT backend is retained as the reference/validation implementation (Section 15, item 3) rather than being discarded after prototyping — having two independent numerical implementations of the same OCP is directly useful for catching formulation-drift bugs, not just a development convenience.
 
 ---
 
@@ -51,6 +51,8 @@ theta_dot = omega
 ---
 
 ## 4. Default Solver Configuration
+
+**Note:** This section describes the intended configuration for the acados backend (currently deferred, Section 2). The CasADi reference implementation uses IPOPT with its standard defaults.
 
 Exhaustive parameter tuning is out of scope here (that belongs to `07_yaml_parameters.md`, and must be re-derived empirically on target hardware regardless of what is written here). This section only states the **default configuration this design targets**, so the mapping between this document and the YAML file is unambiguous:
 
@@ -102,7 +104,7 @@ Each of these is detected outside the solver itself (by `nmpc_controller_node`, 
 
 ## 6. Abstract Solver Interface
 
-The controller node must not know which numerical backend is running underneath it. This is standard practice for any component expected to be swapped or benchmarked (CasADi during development, acados in deployment) without touching the calling code.
+The controller node must not know which numerical backend is running underneath it. This is standard practice for any component expected to be swapped or benchmarked (CasADi reference implementation currently shipped; acados deferred target when native toolchain becomes available) without touching the calling code.
 
 ```
 SolverInterface   (abstract base class)
@@ -216,14 +218,14 @@ $$
 
 This mirrors Eq. (11.1)–(11.2) of the math spec exactly, restated here so the solver's cost implementation is checkable term-by-term against the methodology section without cross-referencing another document.
 
-| Term           | Math spec source                              | Implementation form                                                    |
-| -------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
-| $J_{tracking}$ | Eq. 11.2, $\sum e^TQ(\phi)e$                  | Nonlinear least-squares (backend-native)                               |
-| $J_{control}$  | Eq. 11.2, $\sum u^TRu$                        | Nonlinear least-squares                                                |
-| $J_{smooth}$   | Eq. 11.2, $\sum \Delta u^TR_d\Delta u$        | Nonlinear least-squares                                                |
-| $J_{obstacle}$ | Eq. 11.2, $\sum w_{obstacle}\,C(x,y)$         | **External Cost** — see Section 13 (resolved)                          |
-| $J_{human}$    | Eq. 11.2, $\sum w_h\,\phi\,\max(0,d_0-d_h)^2$ | **External Cost** — hinge term is not a natural least-squares residual |
-| $J_{terminal}$ | Eq. 11.2, $e_N^TPe_N$                         | Nonlinear least-squares (terminal stage)                               |
+| Term           | Math spec source                                     | Implementation form                                                    |
+| -------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| $J_{tracking}$ | Eq. 11.2, $\sum e^TQ(\phi)e$                         | Nonlinear least-squares (backend-native)                               |
+| $J_{control}$  | Eq. 11.2, $\sum u^TRu$                               | Nonlinear least-squares                                                |
+| $J_{smooth}$   | Eq. 11.2, $\sum \Delta u^TR_d\Delta u$               | Nonlinear least-squares                                                |
+| $J_{obstacle}$ | Eq. 11.2, $\sum w_{obstacle}\,C(x,y)$                | **External Cost** — see Section 13 (resolved)                          |
+| $J_{human}$    | Eq. 11.2, $\sum_j w_h\,\phi_j\,\max(0,d_0-d_j)^2$   | **External Cost** — hinge term is not a natural least-squares residual |
+| $J_{terminal}$ | Eq. 11.2, $e_N^TPe_N$                                | Nonlinear least-squares (terminal stage)                               |
 
 $J_{obstacle}$ and $J_{human}$ are implemented as **External Cost** terms (custom CasADi expressions attached directly to the stage cost) rather than forced into a least-squares residual form, since both involve a hinge ($\max(0,\cdot)$) or a non-quadratic map ($C(x,y)$) that a least-squares residual cannot represent naturally without distortion.
 
@@ -371,7 +373,7 @@ Raw Nav2 costmaps are not differentiable (piecewise-constant occupancy grids, or
 
 1. **RESOLVED — `d_safe(phi_j)` is computed upstream in `adaptive_param_node`, not in the solver.** `adaptive_param_node` owns Eqs. 10.1–10.3 and publishes per-human values in `AdaptiveParams.d_safe_per_human` (a `HumanSafetyDistance[]`, matched by `track_id`), added to `06_message_definitions.md`. The solver's `set_adaptive_params` reads these precomputed `d_safe` values directly and does not recompute them from `phi_j`. This keeps the solver backend-agnostic and "dumb," and independently unit-testable. Consequence for `set_adaptive_params`: bind each active human's constraint bound from `d_safe_per_human` by `track_id`, and fill unused solver slots with the dummy-human convention (item 2 below).
 2. **Dummy-human placeholder convention** (Section 3.3) needs a documented constant (e.g. `d_j = 999.0`, `phi_j = 0.0`) so unused constraint slots don't accidentally get logged as a real near-miss in diagnostics.
-3. **CasADi/acados parity testing**: before trusting the acados deployment, both backends should be run on identical logged scenarios and their trajectories, costs, and `SolverDiagnostics` compared numerically, to catch formulation drift introduced during implementation (e.g. a slack penalty accidentally doubled, a sign flipped in an External Cost term). This is the primary justification for keeping the CasADi backend alive post-prototyping (Section 2) rather than deleting it once acados is working.
+3. **CasADi/acados parity testing**: if and when acados becomes available on the target platform (Section 2), both backends should be run on identical logged scenarios and their trajectories, costs, and `SolverDiagnostics` compared numerically before trusting the acados output, to catch formulation drift introduced during implementation (e.g. a slack penalty accidentally doubled, a sign flipped in an External Cost term). This is the primary justification for retaining the CasADi reference backend (Section 2) even after acados becomes feasible.
 4. **`timeout_hold_cycles` value** (Section 9) needs to be chosen and justified — likely a small number of cycles (e.g. 2–3 at 20 Hz, i.e. ~100–150 ms) but should be tied to how fast a nearby human can materially change position, not chosen arbitrarily.
 5. **Odom-jump threshold** (Section 5.2) needs a concrete numerical value (e.g. position discontinuity beyond N cm or heading beyond M degrees between consecutive `/odom` messages) — currently only the trigger category is specified, not the detection threshold.
 
@@ -386,7 +388,7 @@ Raw Nav2 costmaps are not differentiable (piecewise-constant occupancy grids, or
 | Warm-start strategy and invalidation triggers                     | Designed (Section 5)                                                                                                                                                                                                                                                                              |
 | Real-time timeout / fallback behavior                             | Designed (Section 9)                                                                                                                                                                                                                                                                              |
 | Timing breakdown (parameter update / solver / publish / total)    | Designed (Section 10)                                                                                                                                                                                                                                                                             |
-| Solver code (`CasadiSolver`)                                      | Implemented and covered by ROS-free tests; acados target backend remains subject to target code-generation/parity verification. |
+| Solver code (`CasadiSolver`)                                      | Implemented and covered by ROS-free tests; CasADi/IPOPT is the current shipped reference. acados remains deferred (requires target Linux codegen toolchain; stub raises NotImplementedError). |
 | Real-time claim                                                   | Design target only; requires the Section 10 timing breakdown measured on target hardware to become a validated claim                                                                                                                                                                              |
 | Control-theoretic guarantees                                      | None beyond RTI's standard justification + empirical feasibility logging (Doc. 01, Sec. 12.1); no closed-form stability proof — intentionally out of scope, consistent with the applied-engineering (IJAT) positioning, which weighs RMSE / solve time / real-robot validation over formal proofs |
 | Obstacle handling                                                 | Resolved: soft cost only (Section 14)                                                                                                                                                                                                                                                             |

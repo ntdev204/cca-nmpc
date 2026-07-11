@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Tests for track_manager.py (HP-06)."""
-import numpy as np
-import pytest
 
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cca_nmpc_perception'))
 
-from cca_nmpc_perception.track_manager import Track, TrackManager
+from cca_nmpc_perception.track_manager import TrackManager
 
 
 def make_manager(

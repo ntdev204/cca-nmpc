@@ -4,7 +4,6 @@ import numpy as np
 from cca_nmpc_control.fallback import (
     FallbackController, safe_stop_ramp,
     FALLBACK_NONE, FALLBACK_HELD_PREVIOUS, FALLBACK_SAFE_STOP,
-    FALLBACK_SOLVER_FAILED, FALLBACK_TIMEOUT,
 )
 
 

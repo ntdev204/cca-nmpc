@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>ROS2 turn_on_rai_robot for rai_robot</description>
   <maintainer email="rai@todo.todo">rai</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
@@ -20,7 +20,6 @@
 
   <exec_depend>rosidl_default_runtime</exec_depend>
   <depend>ament_index_cpp</depend>
-  <depend>turtlesim</depend>
   <depend>geometry_msgs</depend>
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
@@ -31,16 +30,12 @@
   <depend>rclpy</depend>
   <depend>serial</depend>
   <depend>nav_msgs</depend>
+  <depend>turtlesim</depend>
   <exec_depend>imu_filter_madgwick</exec_depend>
   <exec_depend>joint_state_publisher</exec_depend>
-  <exec_depend>lslidar_driver</exec_depend>
-  <exec_depend>rai_navigation</exec_depend>
-  <exec_depend>rai_controller</exec_depend>
   <exec_depend>twist_mux</exec_depend>
   <exec_depend>robot_localization</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
-  <exec_depend>rai_slam_toolbox</exec_depend>
-  <test_depend>boost</test_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

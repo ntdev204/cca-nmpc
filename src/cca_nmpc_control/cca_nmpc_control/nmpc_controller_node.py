@@ -142,6 +142,10 @@ class NmpcControllerNode(Node):
         d('max_obstacle_samples', 64)
         d('obstacle_sigma', 0.35)
         d('solver_max_cpu_time_sec', 0.045)
+        d('strict_runtime_mode', True)
+        d('require_costmap', True)
+        d('require_reference_path', True)
+        d('allow_empty_humans', False)
         g = self.get_parameter
         self._backend = g('solver_backend').value
         self._N = int(g('horizon_N').value)
@@ -165,6 +169,10 @@ class NmpcControllerNode(Node):
         self._safe_stop_decel = float(g('safe_stop_decel_limit').value)
         self._input_timeout = float(g('input_timeout_sec').value)
         self._max_obstacles = int(g('max_obstacle_samples').value)
+        self._strict_runtime_mode = bool(g('strict_runtime_mode').value)
+        self._require_costmap = bool(g('require_costmap').value)
+        self._require_reference_path = bool(g('require_reference_path').value)
+        self._allow_empty_humans = bool(g('allow_empty_humans').value)
 
     def _build_solver(self):
         """Construct the backend from YAML — node stays backend-agnostic."""
@@ -187,7 +195,7 @@ class NmpcControllerNode(Node):
 
     def _on_human_states(self, msg: HumanStateArray) -> None:
         self._latest_humans = {
-            h.track_id: (h.position.x, h.position.y) for h in msg.humans
+            h.track_id: (h.x, h.y) for h in msg.humans
         }
         self._mark_received('humans')
 
@@ -225,8 +233,27 @@ class NmpcControllerNode(Node):
         self._received_at[name] = time.monotonic()
 
     def _inputs_fresh(self) -> bool:
+        """Check required input freshness.
+
+        strict_runtime_mode=True (default): all topics required (full stack).
+        strict_runtime_mode=False: base topics always required; costmap /
+        reference_path / human-related topics gated by their require_* flags.
+        allow_empty_humans=True: drop predictions/humans/context freshness so
+        empty-scene / partial pipelines can still solve.
+        """
         now = time.monotonic()
-        required = ('params', 'predictions', 'humans', 'context', 'odom', 'reference', 'costmap')
+        required: list[str] = ['params', 'odom']
+        if self._strict_runtime_mode:
+            required.extend(
+                ['predictions', 'humans', 'context', 'reference', 'costmap']
+            )
+        else:
+            if not self._allow_empty_humans:
+                required.extend(['predictions', 'humans', 'context'])
+            if self._require_reference_path:
+                required.append('reference')
+            if self._require_costmap:
+                required.append('costmap')
         return all(
             name in self._received_at
             and now - self._received_at[name] <= self._input_timeout
@@ -280,10 +307,25 @@ class NmpcControllerNode(Node):
                 f'{self._dt*1e3:.1f}ms')
 
     def _push_inputs(self) -> None:
-        self._solver.set_reference(_resample_reference(self._reference_path, self._N + 1))
-        obstacles = _costmap_obstacles(
-            self._costmap, self._pose[:2], self._max_obstacles
-        )
+        if self._reference_path is not None:
+            self._solver.set_reference(
+                _resample_reference(self._reference_path, self._N + 1)
+            )
+        else:
+            # No reference path: hold current pose as flat reference (smoke-test).
+            x, y, th = self._pose
+            n = self._N + 1
+            self._solver.set_reference({
+                'x': np.full(n, x, float),
+                'y': np.full(n, y, float),
+                'theta': np.full(n, th, float),
+            })
+        if self._costmap is not None:
+            obstacles = _costmap_obstacles(
+                self._costmap, self._pose[:2], self._max_obstacles
+            )
+        else:
+            obstacles = np.empty((0, 2))
         self._solver.set_obstacles(obstacles)
 
         preds, uncs = [], []
@@ -303,9 +345,11 @@ class NmpcControllerNode(Node):
                 candidates.append((risk, hp, phi_j, current))
             candidates.sort(key=lambda item: item[0], reverse=True)
             for _risk, hp, phi_j, current in candidates[:self._max_humans]:
-                preds.append((hp.track_id,
-                              np.concatenate([[current[0]], np.asarray(hp.x_hat, float)]),
-                              np.concatenate([[current[1]], np.asarray(hp.y_hat, float)]), phi_j))
+                # Prepend current human position to LSTM future predictions.
+                # Solver expects horizon length N+1 with current sample at index 0.
+                human_position_x_horizon = np.concatenate([[current[0]], np.asarray(hp.x_hat, float)])
+                human_position_y_horizon = np.concatenate([[current[1]], np.asarray(hp.y_hat, float)])
+                preds.append((hp.track_id, human_position_x_horizon, human_position_y_horizon, phi_j))
                 uncs.append(0.0)
         self._solver.set_human_predictions(preds, uncs)
 

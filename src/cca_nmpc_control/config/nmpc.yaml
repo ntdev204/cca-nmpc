@@ -27,3 +27,11 @@ nmpc_controller_node:
     odom_jump_pos_thresh_m: 0.30
     odom_jump_yaw_thresh_rad: 0.35
     safe_stop_decel_limit: 1.0   # max decel [m/s^2] for the safe-stop ramp
+    # Input-freshness mode (P2.3 / review_3).
+    # strict_runtime_mode=true: require all 7 topics (full stack, production).
+    # strict_runtime_mode=false: use require_costmap / require_reference_path /
+    #   allow_empty_humans flags for partial-pipeline / smoke-test runs.
+    strict_runtime_mode: true
+    require_costmap: true
+    require_reference_path: true
+    allow_empty_humans: false

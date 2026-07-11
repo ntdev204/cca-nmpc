@@ -6,7 +6,6 @@ from launch import LaunchDescription
 from launch.actions import GroupAction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
 
 def generate_robot_node(robot_urdf,child):
     return launch_ros.actions.Node(
@@ -99,11 +98,11 @@ def generate_launch_description():
         generate_static_transform_publisher_node(['0.2089', '0.00025', '0.1082'], ['0', '0', '0'], 'base_footprint', 'camera_link'),     
     ]) 
     top_mec_dl_ = GroupAction(
-        condition=IfCondition(top_mec_bs),
+        condition=IfCondition(top_mec_dl),
         actions=[
         generate_robot_node('top_mec_dl_robot.urdf','top_mec_dl'),
         generate_static_transform_publisher_node(['0.14499 ', '0.00002', '0.18652'], ['0', '0', '0'], 'base_footprint', 'laser'),
-        generate_static_transform_publisher_node(['0.2286', '0.0003', '0.1682'], ['0', '0', '0'], 'base_footprint', 'camera_link'),  
+        generate_static_transform_publisher_node(['0.2286', '0.0003', '0.1682'], ['0', '0', '0'], 'base_footprint', 'camera_link'),
     ])     
     mec_EightDrive_robot_ = GroupAction(
         condition=IfCondition(mec_EightDrive_robot),
@@ -152,11 +151,11 @@ def generate_launch_description():
         generate_static_transform_publisher_node(['0.16083', '0.00075', '0.0897'], ['0', '0', '0'], 'base_footprint', 'camera_link'),      
     ]) 
     senior_4wd_dl_robot_ = GroupAction(
-        condition=IfCondition(senior_mec_dl),
+        condition=IfCondition(senior_4wd_dl_robot),
         actions=[
         generate_robot_node('senior_4wd_dl_robot.urdf','senior_4wd_dl'),
         generate_static_transform_publisher_node(['0.15699', '0.00201', '0.14652'], ['0', '0', '0'], 'base_footprint', 'laser'),
-        generate_static_transform_publisher_node(['0.2316', '0.00224', '0.1282'], ['0', '0', '0'], 'base_footprint', 'camera_link'),   
+        generate_static_transform_publisher_node(['0.2316', '0.00224', '0.1282'], ['0', '0', '0'], 'base_footprint', 'camera_link'),
     ]) 
     flagship_4wd_bs_robot_ = GroupAction(
         condition=IfCondition(flagship_4wd_bs_robot),
@@ -166,11 +165,11 @@ def generate_launch_description():
         generate_static_transform_publisher_node(['0.29879', '0.00024', '0.1722'], ['0', '0', '0'], 'base_footprint', 'camera_link'),      
     ]) 
     flagship_4wd_dl_robot_ = GroupAction(
-        condition=IfCondition(top_mec_bs),
+        condition=IfCondition(flagship_4wd_dl_robot),
         actions=[
         generate_robot_node('flagship_4wd_dl_robot.urdf','flagship_4wd_dl'),
         generate_static_transform_publisher_node(['0.23835', '0.00002', '0.28466'], ['0', '0', '0'], 'base_footprint', 'laser'),
-        generate_static_transform_publisher_node(['0.29014', '0.00024', '0.2122'], ['0', '0', '0'], 'base_footprint', 'camera_link'),      
+        generate_static_transform_publisher_node(['0.29014', '0.00024', '0.2122'], ['0', '0', '0'], 'base_footprint', 'camera_link'),
     ])     
     top_4wd_bs_robot_ = GroupAction(
         condition=IfCondition(top_4wd_bs_robot),

@@ -1,25 +1,16 @@
 import os
 from pathlib import Path
-import launch
-from launch.actions import SetEnvironmentVariable
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, GroupAction,
-                            IncludeLaunchDescription, SetEnvironmentVariable)
+from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PythonExpression
-from launch_ros.actions import PushRosNamespace
+from launch.substitutions import LaunchConfiguration
 import launch_ros.actions
-from launch.conditions import IfCondition
-from launch.conditions import UnlessCondition
 
 def generate_launch_description():
     
     bringup_dir = get_package_share_directory('turn_on_rai_robot')
     launch_dir = os.path.join(bringup_dir, 'launch')
-        
-    ekf_config = Path(get_package_share_directory('turn_on_rai_robot'), 'config', 'ekf.yaml')
-    ekf_carto_config = Path(get_package_share_directory('turn_on_rai_robot'), 'config', 'ekf_carto.yaml')
 
     imu_config = Path(get_package_share_directory('turn_on_rai_robot'), 'config', 'imu.yaml')
 
@@ -67,11 +58,6 @@ def generate_launch_description():
             launch_arguments={'mini_mec': 'true'}.items(),
     )
 
-    flagship_type = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(os.path.join(launch_dir, 'robot_mode_description.launch.py')),
-            launch_arguments={'senior_akm': 'true'}.items(),
-    )
-    
     ld = LaunchDescription()
 
     ld.add_action(minibot_type)

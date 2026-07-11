@@ -1,13 +1,8 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
-from launch.conditions import IfCondition
-from launch.conditions import UnlessCondition
 import launch_ros.actions
 
 def generate_launch_description():
 
-    akmcar = LaunchConfiguration('akmcar', default='true')
     return LaunchDescription([
         launch_ros.actions.Node(
             package='turn_on_rai_robot', 

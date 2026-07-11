@@ -78,3 +78,7 @@ nmpc_controller_node:
     max_obstacle_samples: 64
     obstacle_sigma: 0.35
     solver_max_cpu_time_sec: 0.045
+    strict_runtime_mode: true
+    require_costmap: true
+    require_reference_path: true
+    allow_empty_humans: false

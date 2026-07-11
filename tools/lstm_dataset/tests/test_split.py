@@ -145,7 +145,7 @@ def test_composite_key_prevents_cross_session_collision():
         y=0.0,
         vx=1.0,
         vy=0.0,
-        c=1.0,
+        confidence=1.0,
     )
     rec2 = TrajectoryRecord(
         session_id="session_b",
@@ -156,7 +156,7 @@ def test_composite_key_prevents_cross_session_collision():
         y=10.0,
         vx=0.0,
         vy=1.0,
-        c=1.0,
+        confidence=1.0,
     )
 
     key1 = rec1.trajectory_key()

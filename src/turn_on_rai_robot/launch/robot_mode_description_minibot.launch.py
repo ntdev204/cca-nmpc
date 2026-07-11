@@ -6,7 +6,6 @@ from launch import LaunchDescription
 from launch.actions import GroupAction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
 
 def generate_robot_node(robot_urdf,child):
     return launch_ros.actions.Node(

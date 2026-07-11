@@ -36,7 +36,6 @@ import yaml
 
 import rclpy
 from tf2_msgs.srv import FrameGraph
-import tf2_py as tf2
 import tf2_ros
 
 
@@ -54,7 +53,7 @@ def main():
     node = rclpy.create_node('view_frames')
 
     buf = tf2_ros.Buffer(node=node)
-    listener = tf2_ros.TransformListener(buf, node, spin_thread=False)
+    tf2_ros.TransformListener(buf, node, spin_thread=False)
 
     executor = rclpy.executors.SingleThreadedExecutor()
     executor.add_node(node)
@@ -109,7 +108,7 @@ def generate_dot(data, recorded_time):
         dot += 'Most recent transform: '+str(map['most_recent_transform'])+'\\n'
         dot += 'Oldest transform: '+str(map['oldest_transform'])+'\\n'
         dot += '"];\n'
-        if not map['parent'] in data:
+        if map['parent'] not in data:
             root = map['parent']
     dot += 'edge [style=invis];\n'
     dot += ' subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";\n'

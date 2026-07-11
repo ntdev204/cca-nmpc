@@ -21,7 +21,7 @@ def _make_records(times, xs, ys, vxs, vys, track_id=0, session_id="test_session"
             y=float(y),
             vx=float(vxx),
             vy=float(vyy),
-            c=1.0,
+            confidence=1.0,
         )
         for t, x, y, vxx, vyy in zip(times, xs, ys, vxs, vys)
     ]

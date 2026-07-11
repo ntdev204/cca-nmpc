@@ -5,6 +5,7 @@ __pycache__/
 build/
 install/
 log/
+review/
 
 # Claude worktrees (session-local, not part of the repo)
 .claude/worktrees/
@@ -19,3 +20,5 @@ datasets/
 
 .vscode/
 .idea/
+
+wsl.txt

@@ -82,7 +82,7 @@ Velocity Command (/cmd_vel)
 | LSTM prediction                         | 5–10 Hz               | Slower by design; buffers input sequence of length $L$                                                       |
 | Context estimation                      | Runs every NMPC cycle | Geometric terms recomputed fresh; predicted trajectory held between LSTM updates (Section 13.1 of math spec) |
 | Adaptive parameter generation           | Runs every NMPC cycle | Cheap, closed-form (Eqs. 10.1–10.3)                                                                          |
-| NMPC solve                              | 20–50 Hz              | Horizon $H$, solved via acados/CasADi RTI scheme recommended for real-time                                   |
+| NMPC solve                              | 20–50 Hz              | Horizon $H$, CasADi/IPOPT reference (acados RTI scheme deferred for target platform)                         |
 
 **Rule:** $f_{NMPC} \ge f_{context} \ge f_{LSTM}$, consistent with Section 13.1 of the Mathematical Model document. Exact target rates depend on onboard compute and should be measured empirically (Section 12.1 feasibility logging covers solve time as well as feasibility).
 

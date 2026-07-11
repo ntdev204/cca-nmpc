@@ -108,9 +108,14 @@ class SolverInterface(ABC):
         """
         Update human motion predictions for the horizon.
 
+        Controller prepends current human position before passing arrays here.
+        Solver expects length horizon_N+1 with current sample at index 0.
+        Array layout: [current, future_1, future_2, ...].
+
         Args:
-            predictions: list per tracked human of (track_id, x_hat[H], y_hat[H], phi_j)
-                where x_hat, y_hat are np.ndarray of length horizon_N+1, phi_j is scalar context index
+            predictions: list per tracked human of (track_id, human_position_x_horizon, human_position_y_horizon, phi_j)
+                where human_position_x_horizon, human_position_y_horizon are np.ndarray of length horizon_N+1
+                with current sample prepended, phi_j is scalar context index
             uncertainties: list per human of sigma_h values (currently not used in OCP but reserved)
         """
         pass

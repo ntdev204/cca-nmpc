@@ -41,7 +41,7 @@
            │
            ▼
 ┌─────────────────────┐
-│  nmpc_controller_node│  CCA-NMPC solver (acados / CasADi backend)
+│  nmpc_controller_node│  CCA-NMPC solver (CasADi/IPOPT reference; acados deferred)
 │  (Python, rclpy)     │  subscribes: /adaptive_params, /human_predictions,
 │                       │               /robot_odom, /local_costmap
 │                       │  publishes: /cmd_vel, /nmpc_diagnostics

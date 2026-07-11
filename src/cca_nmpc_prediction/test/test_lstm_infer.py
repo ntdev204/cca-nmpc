@@ -6,7 +6,6 @@ normalization round-trip and that the
 TensorRT adapter fails clearly without a valid engine.
 """
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest

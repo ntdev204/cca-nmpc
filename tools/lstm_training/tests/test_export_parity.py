@@ -1,5 +1,4 @@
 """Export tests: ONNX round-trips and matches PyTorch within tolerance."""
-from pathlib import Path
 
 from tools.lstm_training.model import LSTMPredictor, LSTMConfig
 from tools.lstm_training.export import (

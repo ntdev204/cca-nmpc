@@ -108,3 +108,47 @@ def test_diagnostics_populated():
     d = s.get_diagnostics()
     assert d.objective_value >= 0.0
     assert d.constraint_violation < 1e-4  # dynamics equality satisfied
+
+
+def test_obstacle_on_reference_path_raises_cost_and_deviates_trajectory():
+    """P2.5: obstacle at (1.5, 0) on straight x-axis reference must push
+    obstacle_cost above the no-obstacle baseline and deflect the planned
+    trajectory laterally (max |y| increases or lateral speed vy is non-zero).
+
+    Verifies the Gaussian soft obstacle cost (Eq. 11.2 J_obstacle) is active
+    in the NLP and changes the solver output when an obstacle blocks the path.
+    """
+    N = 15
+    ref = _straight_ref(N, 3.0, 0.0)
+    x0 = np.array([0.0, 0.0, 0.0])
+
+    # Baseline: no obstacles
+    s_base, _, _ = _make_solver(N=N)
+    s_base.set_reference(ref)
+    s_base.set_human_predictions([], [])
+    s_base.set_adaptive_params(_adaptive([]))
+    r_base = s_base.solve(x0)
+    assert r_base.success
+
+    # With obstacle on path
+    s_obs, _, _ = _make_solver(N=N)
+    s_obs.set_reference(ref)
+    s_obs.set_obstacles(np.array([[1.5, 0.0]]))
+    s_obs.set_human_predictions([], [])
+    s_obs.set_adaptive_params(_adaptive([]))
+    r_obs = s_obs.solve(x0)
+    assert r_obs.success
+
+    # Obstacle cost must be strictly higher when obstacle is present
+    assert r_obs.cost_breakdown["obstacle_cost"] > r_base.cost_breakdown["obstacle_cost"]
+
+    # Trajectory must deflect: either lateral y positions are pushed away from 0
+    # or the first lateral control command vy is non-negligible
+    max_y_base = float(np.max(np.abs(r_base.trajectory["y"])))
+    max_y_obs = float(np.max(np.abs(r_obs.trajectory["y"])))
+    lateral_deflected = (max_y_obs > max_y_base + 1e-4) or (abs(r_obs.u0[1]) > 1e-4)
+    assert lateral_deflected, (
+        f"Expected lateral deflection from obstacle but got "
+        f"max|y|_base={max_y_base:.6f}, max|y|_obs={max_y_obs:.6f}, "
+        f"u0[1]={r_obs.u0[1]:.6f}"
+    )

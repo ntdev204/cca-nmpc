@@ -34,11 +34,19 @@ class AdaptiveParamNode(Node):
 
     def _load_config(self) -> AdaptiveConfig:
         d = self.declare_parameter
-        d('d_safe0', 0.6); d('k_d', 0.8)
-        d('v_x0', 1.0); d('v_y0', 0.8); d('omega_0', 1.2)
-        d('k_x', 0.6); d('k_y', 0.5); d('k_omega', 0.7)
-        d('v_x_min', 0.08); d('v_y_min', 0.06); d('omega_min', 0.1)
-        d('Q0_diag', [5.0, 5.0, 2.0]); d('Qh_diag', [8.0, 8.0, 3.0])
+        d('d_safe0', 0.6)
+        d('k_d', 0.8)
+        d('v_x0', 1.0)
+        d('v_y0', 0.8)
+        d('omega_0', 1.2)
+        d('k_x', 0.6)
+        d('k_y', 0.5)
+        d('k_omega', 0.7)
+        d('v_x_min', 0.08)
+        d('v_y_min', 0.06)
+        d('omega_min', 0.1)
+        d('Q0_diag', [5.0, 5.0, 2.0])
+        d('Qh_diag', [8.0, 8.0, 3.0])
         g = self.get_parameter
         return AdaptiveConfig(
             d_safe0=g('d_safe0').value, k_d=g('k_d').value,

@@ -292,10 +292,10 @@ class CasadiSolver(SolverInterface):
         hx = np.zeros((N + 1, M))
         hy = np.zeros((N + 1, M))
         phi = np.zeros(M)
-        for j, (_tid, x_hat, y_hat, phi_j) in enumerate(self._human_slots):
-            xa = np.asarray(x_hat, float)
-            ya = np.asarray(y_hat, float)
-            # Time-interpolate LSTM predictions onto NMPC grid
+        for j, (_tid, human_position_x_horizon, human_position_y_horizon, phi_j) in enumerate(self._human_slots):
+            xa = np.asarray(human_position_x_horizon, float)
+            ya = np.asarray(human_position_y_horizon, float)
+            # Time-interpolate onto NMPC grid; array is length H+1 with current sample at index 0
             hx[:, j] = _interpolate_lstm_to_nmpc(xa, self._f_lstm_hz, self._dt, N + 1)
             hy[:, j] = _interpolate_lstm_to_nmpc(ya, self._f_lstm_hz, self._dt, N + 1)
             phi[j] = float(phi_j)
@@ -413,10 +413,14 @@ def _interpolate_lstm_to_nmpc(
     lstm_prediction: np.ndarray, f_lstm_hz: float, dt_nmpc: float, n_nmpc: int
 ) -> np.ndarray:
     """
-    Interpolate LSTM predictions (8Hz grid) onto NMPC time grid (20Hz).
+    Interpolate human position horizon onto NMPC time grid.
+
+    Solver expects length H+1 with current sample prepended at index 0.
+    The array layout is [current, future_1, future_2, ...].
+    First element treated as t=0; remaining elements on LSTM prediction grid.
 
     Args:
-        lstm_prediction: H-length array from LSTM (e.g., x_hat or y_hat)
+        lstm_prediction: (H+1)-length array with current human position prepended
         f_lstm_hz: LSTM prediction frequency (Hz), e.g., 8.0
         dt_nmpc: NMPC timestep (s), e.g., 0.05
         n_nmpc: Number of NMPC stages (N+1)

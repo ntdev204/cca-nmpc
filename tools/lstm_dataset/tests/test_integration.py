@@ -17,7 +17,7 @@ def test_full_pipeline_synthetic():
         # trajectory-level split yields non-empty val/test (needs >= ~7 tracks).
         csv_path = tmpdir / "synthetic.csv"
         with open(csv_path, "w") as f:
-            f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,c\n")
+            f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,confidence\n")
             for track_id in range(1, 13):  # 12 trajectories
                 vx = 0.5 * ((track_id % 5) - 2)  # spread of directions
                 vy = 0.4 * ((track_id % 3) - 1)
@@ -113,7 +113,7 @@ def test_full_pipeline_synthetic():
 def _write_synthetic_csv(csv_path: Path) -> None:
     """Write a 12-trajectory synthetic CSV (shared by tests below)."""
     with open(csv_path, "w") as f:
-        f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,c\n")
+        f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,confidence\n")
         for track_id in range(1, 13):
             vx = 0.5 * ((track_id % 5) - 2)
             vy = 0.4 * ((track_id % 3) - 1)

@@ -77,7 +77,9 @@ def train(
         hidden_size=cfg.hidden, num_layers=cfg.layers, horizon=cfg.H,
     ))
     optim = torch.optim.Adam(model.parameters(), lr=cfg.lr)
-    loss_fn = lambda p, t: weighted_trajectory_loss(p, t, cfg.lambda_vel)
+
+    def loss_fn(p, t):
+        return weighted_trajectory_loss(p, t, cfg.lambda_vel)
 
     best_val = float("inf")
     best_epoch = -1

@@ -11,7 +11,7 @@ import numpy as np
 
 
 # Column names in the expected order
-REQUIRED_COLUMNS = ["session_id", "sequence_id", "timestamp", "track_id", "x", "y", "vx", "vy", "c"]
+REQUIRED_COLUMNS = ["session_id", "sequence_id", "timestamp", "track_id", "x", "y", "vx", "vy", "confidence"]
 
 # Channel order for windowed tensors [x, y, vx, vy]
 TENSOR_CHANNELS = ["x", "y", "vx", "vy"]
@@ -33,12 +33,12 @@ class TrajectoryRecord:
     y: float              # Position y (m) in map frame
     vx: float             # Velocity x (m/s) in map frame
     vy: float             # Velocity y (m/s) in map frame
-    c: float              # Detection confidence [0, 1]
+    confidence: float     # Detection confidence [0, 1]
 
     def __post_init__(self):
         """Validate field types and ranges."""
-        if not 0.0 <= self.c <= 1.0:
-            raise ValueError(f"Confidence c={self.c} must be in [0, 1]")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError(f"Confidence must be in [0, 1], got {self.confidence}")
         if self.track_id < 0:
             raise ValueError(f"track_id={self.track_id} must be non-negative")
         if self.sequence_id < 0:

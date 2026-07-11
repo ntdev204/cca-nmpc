@@ -51,7 +51,7 @@ def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
             y=float(row["y"]),
             vx=float(row["vx"]),
             vy=float(row["vy"]),
-            c=float(row["confidence"] if "confidence" in row else row["c"]),
+            confidence=float(row["confidence"] if "confidence" in row else row["c"]),
         )
         key = record.trajectory_key()
         tracks.setdefault(key, []).append(record)
@@ -61,10 +61,14 @@ def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
 
 
 def _validate_csv_columns(df: pd.DataFrame, path: Path) -> None:
-    """Raise ValueError if required columns are missing."""
+    """Raise ValueError if required columns are missing.
+
+    Primary column is `confidence`. Legacy CSVs that still use `c` are accepted
+    by treating `c` as a synonym during validation only.
+    """
     missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
-    if "c" in missing and "confidence" in df.columns:
-        missing.remove("c")
+    if "confidence" in missing and "c" in df.columns:
+        missing.remove("confidence")
     if missing:
         raise ValueError(
             f"CSV {path} missing required columns: {missing}. "
@@ -149,7 +153,7 @@ def load_rosbag(
                     y=float(state.y),
                     vx=float(state.vx),
                     vy=float(state.vy),
-                    c=float(state.confidence),
+                    confidence=float(state.confidence),
                 )
                 key = record.trajectory_key()
                 tracks.setdefault(key, []).append(record)
