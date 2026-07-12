@@ -64,7 +64,7 @@ def generate_launch_description():
         actions=[
         generate_robot_node('mini_mec_robot.urdf','mini_mec'),
         generate_static_transform_publisher_node(['0.03163', '0.00009', '0.09502'], ['0', '0', '0'], 'base_footprint', 'laser'),
-        generate_static_transform_publisher_node(['0.10709', '0.00032', '0.0762'], ['0', '0', '0'], 'base_footprint', 'camera_link'),    
+        generate_static_transform_publisher_node(['0.10709', '0.00032', '0.21'], ['0', '-0.34906585', '0'], 'base_footprint', 'camera_link'),
     ]) 
           
     mini_tank_ = GroupAction(

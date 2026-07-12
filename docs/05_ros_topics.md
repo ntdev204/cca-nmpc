@@ -44,9 +44,10 @@ All topics use `cca_nmpc_msgs` custom message types unless a standard ROS2 type 
 
 | Frame pair | Broadcaster | Notes |
 |---|---|---|
-| `map` → `odom` | localization stack (e.g., AMCL / SLAM) | standard Nav2 convention |
-| `odom` → `base_link` | robot base driver | wheel/IMU odometry |
-| `base_link` → `camera_link` | static TF (URDF) | fixed camera mount |
+| `map` → `odom_combined` | localization stack (e.g., AMCL / SLAM / slam_toolbox) | global localization relation used by the current robot stack |
+| `odom_combined` → `base_footprint` | robot base driver / EKF | wheel/IMU odometry fused into the robot base frame |
+| `base_footprint` → `base_link` | static TF / robot description | body-frame bridge used by the current robot stack |
+| `base_link` → `camera_link` | static TF (URDF) | Mini Mecanum mount: camera centre at 0.21 m above ground, pitched upward 20° (`pitch = -0.34906585 rad` in ROS coordinates) |
 
 ---
 

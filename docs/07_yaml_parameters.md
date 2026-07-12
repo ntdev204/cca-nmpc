@@ -103,8 +103,8 @@ nmpc_controller_node:
     safe_stop_decel_limit: 1.0 # max deceleration [m/s^2] for the safe-stop ramp (Section 9)
     # Input-freshness mode (review_3 / P2.3).
     # strict_runtime_mode=true (default/production): require all 7 topics
-    #   (params, odom, predictions, humans, context, reference, costmap).
-    # strict_runtime_mode=false: base topics (params, odom) always required;
+    #   (params, odom_combined, predictions, humans, context, reference, costmap).
+    # strict_runtime_mode=false: base topics (params, odom_combined) always required;
     #   costmap / reference_path / human topics gated by the flags below so
     #   partial-pipeline and smoke-test runs can still solve.
     strict_runtime_mode: true
