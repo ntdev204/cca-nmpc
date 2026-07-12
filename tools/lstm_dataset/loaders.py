@@ -2,8 +2,8 @@
 
 Rosbag2 support is behind an import guard (DS-07): if the rosbags
 library is not installed this module still imports cleanly.
-Trajectory key is composite (session_id, sequence_id, track_id) to
-prevent cross-session ID collision (P1 #7).
+Trajectory key is composite (session_id, run_id, sequence_id, track_id) to
+prevent cross-session and cross-run ID collision (P1 dataset identity).
 """
 
 from __future__ import annotations
@@ -15,19 +15,51 @@ import pandas as pd
 
 from .schema import REQUIRED_COLUMNS, TrajectoryKey, TrajectoryRecord
 
+# Textual truthy tokens accepted for the CSV `is_observed` flag. Plain
+# bool("False") is True for any non-empty string, so booleans coming from a
+# text CSV must be parsed explicitly to preserve observation provenance.
+_TRUE_TOKENS = {"true", "1", "yes", "y", "t"}
+
+# Columns that make up the composite trajectory key. Any null cell here would
+# corrupt trajectory identity, so they are validated as non-null on load.
+_IDENTITY_COLUMNS = ("session_id", "run_id", "sequence_id", "track_id")
+
+
+def _parse_bool(value, default: bool = True) -> bool:
+    """Parse a CSV cell into a bool, treating "False"/"0"/"" as False.
+
+    A missing cell (pandas NaN) falls back to ``default`` rather than being
+    coerced to True, so an empty is_observed cell is not silently marked as an
+    observation.
+    """
+    if pd.isna(value):
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in _TRUE_TOKENS
+    return bool(value)
+
+
+def _opt_str(value, default: str) -> str:
+    """Optional string metadata: missing cell (NaN) -> documented default,
+    never the string "nan"."""
+    if pd.isna(value):
+        return default
+    return str(value)
+
 
 def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
     """Load trajectory records from a CSV file.
 
     The CSV must have at minimum the columns listed in REQUIRED_COLUMNS,
-    including session_id and sequence_id. Records are grouped by composite
-    key (session_id, sequence_id, track_id) and sorted by timestamp.
+    including session_id, run_id and sequence_id. Records are grouped by
+    composite key (session_id, run_id, sequence_id, track_id) and sorted by
+    timestamp.
 
     Args:
         path: Path to the CSV file.
 
     Returns:
-        Dict mapping (session_id, sequence_id, track_id) -> sorted records.
+        Dict mapping (session_id, run_id, sequence_id, track_id) -> sorted records.
 
     Raises:
         FileNotFoundError: If the path does not exist.
@@ -44,6 +76,7 @@ def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
     for _, row in df.iterrows():
         record = TrajectoryRecord(
             session_id=str(row["session_id"]),
+            run_id=str(row["run_id"]),
             sequence_id=int(row["sequence_id"]),
             timestamp=float(row["timestamp"]),
             track_id=int(row["track_id"]),
@@ -52,6 +85,14 @@ def load_csv(path: str | Path) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
             vx=float(row["vx"]),
             vy=float(row["vy"]),
             confidence=float(row["confidence"] if "confidence" in row else row["c"]),
+            subject_id=_opt_str(row["subject_id"], "unknown") if "subject_id" in row else "unknown",
+            scenario_id=_opt_str(row["scenario_id"], "unknown") if "scenario_id" in row else "unknown",
+            environment_id=_opt_str(row["environment_id"], "unknown") if "environment_id" in row else "unknown",
+            frame_id=_opt_str(row["frame_id"], "") if "frame_id" in row else "",
+            # Column present but empty -> conservative False: an unknown flag
+            # must not claim tracker-observation provenance. Column absent
+            # entirely -> True (clean runtime always publishes observed tracks).
+            is_observed=_parse_bool(row["is_observed"], default=False) if "is_observed" in row else True,
         )
         key = record.trajectory_key()
         tracks.setdefault(key, []).append(record)
@@ -77,6 +118,23 @@ def _validate_csv_columns(df: pd.DataFrame, path: Path) -> None:
     if len(df) == 0:
         raise ValueError(f"CSV {path} contains no data rows.")
 
+    # Identity columns form the composite trajectory key. A null/empty cell
+    # would stringify to "nan" (or coerce to 0), silently merging physically
+    # distinct runs/tracks under one key and leaking data across splits.
+    # Reject them here rather than fabricate an identity downstream.
+    for col in _IDENTITY_COLUMNS:
+        if col not in df.columns:
+            continue
+        null_rows = df.index[df[col].isna()].tolist()
+        if null_rows:
+            raise ValueError(
+                f"CSV {path} has empty/null values in identity column '{col}' "
+                f"at row index {null_rows[:10]}"
+                f"{' (+more)' if len(null_rows) > 10 else ''}. "
+                "Identity columns (session_id, run_id, sequence_id, track_id) "
+                "must be present on every row to preserve trajectory isolation."
+            )
+
 
 # ---------------------------------------------------------------------------
 # Optional rosbag2 loader (DS-07) — degrades gracefully if dep absent
@@ -95,6 +153,7 @@ def load_rosbag(
     path: str | Path,
     topic: str = "/human_states",
     session_id: str = "default",
+    run_id: str = "default",
     sequence_id: int = 0,
 ) -> Dict[TrajectoryKey, List[TrajectoryRecord]]:
     """Load trajectory records from a rosbag2 (.db3) file.
@@ -106,10 +165,12 @@ def load_rosbag(
         path: Path to rosbag2 directory or .db3 file.
         topic: ROS2 topic name containing human state messages.
         session_id: Recording session identifier (default "default").
-        sequence_id: Sequence within session (default 0).
+        run_id: Recording run within session (default "default"). One rosbag
+            is one physical run; the tracker IDs reset between runs.
+        sequence_id: Sequence within run (default 0).
 
     Returns:
-        Dict mapping (session_id, sequence_id, track_id) -> sorted records.
+        Dict mapping (session_id, run_id, sequence_id, track_id) -> sorted records.
 
     Raises:
         ImportError: If the rosbags library is not installed.
@@ -146,6 +207,7 @@ def load_rosbag(
             for state in humans:
                 record = TrajectoryRecord(
                     session_id=session_id,
+                    run_id=run_id,
                     sequence_id=sequence_id,
                     timestamp=timestamp_s,
                     track_id=int(state.track_id),

@@ -12,7 +12,9 @@ from .interface import (
 _UNAVAILABLE = (
     "AcadosSolver requires the acados code-generation toolchain, which is built "
     "on the target Linux platform. Use CasadiSolver on Windows / for the "
-    "reference backend. See docs/08_solver_design.md Section 2."
+    "reference backend. This backend is intentionally deferred, not missing: "
+    "see docs/08_solver_design.md Section 2 and the roadmap in "
+    "docs/09_roadmap.md Section 2 (acceptance criteria + parity test)."
 )
 
 

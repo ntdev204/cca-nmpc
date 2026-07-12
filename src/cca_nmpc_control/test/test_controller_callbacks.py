@@ -102,8 +102,42 @@ def _load_node_module():
     return node_mod
 
 
-_node_mod = _load_node_module()
-NmpcControllerNode = _node_mod.NmpcControllerNode
+def _load_node_module_isolated():
+    """Load the node module without leaking mocks into the global import state.
+
+    ``_load_node_module`` installs MagicMock stand-ins for casadi/rclpy/msgs and
+    replaces the real ``cca_nmpc_control`` package (and its ``warm_start``
+    submodule) in ``sys.modules``. If those replacements survive, later test
+    modules (e.g. ``test_invalidation``) import the mocked ``warm_start`` whose
+    detectors always return False, silently masking reset/warm-start
+    regressions. We snapshot ``sys.modules`` and restore it afterwards.
+
+    The methods exercised here (``_on_human_states``, ``_inputs_fresh``) are
+    pure Python over ``self`` attributes, so the class stays usable once the
+    real modules are restored.
+    """
+    # Only the ROS/solver namespaces are mocked; restoring the whole snapshot
+    # would evict freshly imported C extensions (e.g. numpy) that cannot be
+    # reloaded in the same process ("cannot load module more than once").
+    managed = (
+        'casadi', 'rclpy', 'geometry_msgs', 'nav_msgs', 'nav2_msgs',
+        'cca_nmpc_msgs', 'cca_nmpc_control',
+    )
+
+    def _is_managed(name: str) -> bool:
+        return any(name == p or name.startswith(p + '.') for p in managed)
+
+    saved = {n: m for n, m in sys.modules.items() if _is_managed(n)}
+    try:
+        node_mod = _load_node_module()
+        return node_mod.NmpcControllerNode
+    finally:
+        for name in [n for n in sys.modules if _is_managed(n)]:
+            del sys.modules[name]
+        sys.modules.update(saved)
+
+
+NmpcControllerNode = _load_node_module_isolated()
 
 
 class _FakeNode:

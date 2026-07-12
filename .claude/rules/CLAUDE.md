@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-# GEMINI.md - AG Kit
+# CLAUDE.md - Claude Kit
 
 > This file defines how the AI behaves in this workspace.
 
@@ -17,12 +17,12 @@ trigger: always_on
 Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Read specific sections.
 
 - **Selective Reading:** DO NOT read ALL files in a skill folder. Read `SKILL.md` first, then only read sections matching the user's request.
-- **Rule Priority:** P0 (GEMINI.md) > P1 (Agent .md) > P2 (SKILL.md). All rules are binding.
+- **Rule Priority:** P0 (CLAUDE.md) > P1 (Agent .md) > P2 (SKILL.md). All rules are binding.
 
 ### 2. Enforcement Protocol
 
 1. **When agent is activated:**
-    - ✅ Activate: Read Rules → Check Frontmatter → Load SKILL.md → Apply All.
+   - ✅ Activate: Read Rules → Check Frontmatter → Load SKILL.md → Apply All.
 2. **Forbidden:** Never skip reading agent rules or skill instructions. "Read → Understand → Apply" is mandatory.
 
 ---
@@ -75,12 +75,12 @@ When auto-applying an agent, inform the user:
 
 **Before ANY code or design work, you MUST complete this mental checklist:**
 
-| Step | Check | If Unchecked |
-|------|-------|--------------|
-| 1 | Did I identify the correct agent for this domain? | → STOP. Analyze request domain first. |
-| 2 | Did I READ the agent's `.md` file (or recall its rules)? | → STOP. Open `.agents/agent/{agent}.md` |
-| 3 | Did I announce `🤖 Applying knowledge of @[agent]...`? | → STOP. Add announcement before response. |
-| 4 | Did I load required skills from agent's frontmatter? | → STOP. Check `skills:` field and read them. |
+| Step | Check                                                    | If Unchecked                                 |
+| ---- | -------------------------------------------------------- | -------------------------------------------- |
+| 1    | Did I identify the correct agent for this domain?        | → STOP. Analyze request domain first.        |
+| 2    | Did I READ the agent's `.md` file (or recall its rules)? | → STOP. Open `.claude/agent/{agent}.md`      |
+| 3    | Did I announce `🤖 Applying knowledge of @[agent]...`?   | → STOP. Add announcement before response.    |
+| 4    | Did I load required skills from agent's frontmatter?     | → STOP. Check `skills:` field and read them. |
 
 **Failure Conditions:**
 
@@ -90,6 +90,19 @@ When auto-applying an agent, inform the user:
 
 > 🔴 **Self-Check Trigger:** Every time you are about to write code or create UI, ask yourself:
 > "Have I completed the Agent Routing Checklist?" If NO → Complete it first.
+
+---
+
+## CODEX (AUTO)
+
+> **Luôn sử dụng codex cloud**
+
+1. Luôn đọc docs để hiểu mô hình toán và phải thực hiện đúng theo mô hình toán.
+2. Luôn dùng codex review về task, feature, fix,...
+3. Nên đọc và hỏi task "Thảo luận" trong codex để hiểu về mô hình toán.
+4. Khi nào Codex review "Accept" thì mới được sang task mới.
+5. Ưu tiên sử dụng codex app (app chatgpt) project cca-nmpc.
+6. Sử dụng codex để làm việc với git (skill: git-workflow).
 
 ---
 
@@ -123,15 +136,16 @@ When user's prompt is NOT in English:
 ### 🗺️ System Map & Memory Read
 
 > 🔴 **MANDATORY:** At session start, you MUST read:
-> 1. `.agents/ARCHITECTURE.md` to understand Agents, Skills, and Scripts.
-> 2. `.agents/memory/MEMORY.md` to load persistent project conventions, user preferences, and decisions.
+>
+> 1. `.claude/ARCHITECTURE.md` to understand Agents, Skills, and Scripts.
+> 2. `.claude/memory/MEMORY.md` to load persistent project conventions, user preferences, and decisions.
 
-**Path Awareness (Note: the project directory name is `.agents` plural):**
+**Path Awareness (Note: agent assets live under the `.claude/` directory):**
 
-- Agents: `.agents/agent/` (Project)
-- Skills: `.agents/skills/` (Project)
-- Memory: `.agents/memory/` (Project)
-- Runtime Scripts: `.agents/skills/<skill>/scripts/`
+- Agents: `.claude/agent/` (Project)
+- Skills: `.claude/skills/` (Project)
+- Memory: `.claude/memory/` (Project)
+- Runtime Scripts: `.claude/skills/<skill>/scripts/`
 
 ### 🧠 Read → Understand → Apply
 
@@ -187,10 +201,10 @@ When user's prompt is NOT in English:
 
 **Trigger:** When the user says "run the final checks", "final checks", "run all the tests", or similar phrases.
 
-| Task Stage       | Command                                            | Purpose                        |
-| ---------------- | -------------------------------------------------- | ------------------------------ |
-| **Manual Audit** | `python .agents/scripts/checklist.py .`             | Priority-based project audit   |
-| **Pre-Deploy**   | `python .agents/scripts/checklist.py . --url <URL>` | Full Suite + Performance + E2E |
+| Task Stage       | Command                                             | Purpose                        |
+| ---------------- | --------------------------------------------------- | ------------------------------ |
+| **Manual Audit** | `python .claude/scripts/checklist.py .`             | Priority-based project audit   |
+| **Pre-Deploy**   | `python .claude/scripts/checklist.py . --url <URL>` | Full Suite + Performance + E2E |
 
 **Priority Execution Order:**
 
@@ -216,9 +230,9 @@ When user's prompt is NOT in English:
 | `lighthouse_audit.py`      | performance-profiling | Before deploy       |
 | `playwright_runner.py`     | webapp-testing        | Before deploy       |
 
-> 🔴 **Agents & Skills can invoke ANY script** via `python .agents/skills/<skill>/scripts/<script>.py`
+> 🔴 **Agents & Skills can invoke ANY script** via `python .claude/skills/<skill>/scripts/<script>.py`
 
-### 🎭 Gemini Mode Mapping
+### 🎭 CLAUDE Mode Mapping
 
 | Mode     | Agent             | Behavior                                     |
 | -------- | ----------------- | -------------------------------------------- |
@@ -241,10 +255,10 @@ When user's prompt is NOT in English:
 
 > **Design rules are in the specialist agents, NOT here.**
 
-| Task         | Read                            |
-| ------------ | ------------------------------- |
-| Web UI/UX    | `.agents/agent/frontend-specialist.md` |
-| Mobile UI/UX | `.agents/agent/mobile-developer.md`    |
+| Task         | Read                                   |
+| ------------ | -------------------------------------- |
+| Web UI/UX    | `.claude/agent/frontend-specialist.md` |
+| Mobile UI/UX | `.claude/agent/mobile-developer.md`    |
 
 **These agents contain:**
 
@@ -266,7 +280,7 @@ When user's prompt is NOT in English:
 
 ### Key Scripts
 
-- **Verify**: `.agents/scripts/verify_all.py`, `.agents/scripts/checklist.py`
+- **Verify**: `.claude/scripts/verify_all.py`, `.claude/scripts/checklist.py`
 - **Scanners**: `security_scan.py`
 - **Audits**: `ux_audit.py`, `mobile_audit.py`, `lighthouse_audit.py`, `seo_checker.py`
 - **Test**: `playwright_runner.py`, `test_runner.py`

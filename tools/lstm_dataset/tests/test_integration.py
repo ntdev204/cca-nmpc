@@ -17,7 +17,7 @@ def test_full_pipeline_synthetic():
         # trajectory-level split yields non-empty val/test (needs >= ~7 tracks).
         csv_path = tmpdir / "synthetic.csv"
         with open(csv_path, "w") as f:
-            f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,confidence\n")
+            f.write("session_id,run_id,sequence_id,timestamp,track_id,x,y,vx,vy,confidence\n")
             for track_id in range(1, 13):  # 12 trajectories
                 vx = 0.5 * ((track_id % 5) - 2)  # spread of directions
                 vy = 0.4 * ((track_id % 3) - 1)
@@ -25,7 +25,7 @@ def test_full_pipeline_synthetic():
                     t = i * 0.1
                     x = track_id + vx * t * 10.0
                     y = vy * t * 10.0
-                    f.write(f"test_session,0,{t},{track_id},{x},{y},{vx*10.0},{vy*10.0},0.9\n")
+                    f.write(f"test_session,run_0,0,{t},{track_id},{x},{y},{vx*10.0},{vy*10.0},0.9\n")
 
         output_dir = tmpdir / "output"
 
@@ -113,7 +113,7 @@ def test_full_pipeline_synthetic():
 def _write_synthetic_csv(csv_path: Path) -> None:
     """Write a 12-trajectory synthetic CSV (shared by tests below)."""
     with open(csv_path, "w") as f:
-        f.write("session_id,sequence_id,timestamp,track_id,x,y,vx,vy,confidence\n")
+        f.write("session_id,run_id,sequence_id,timestamp,track_id,x,y,vx,vy,confidence\n")
         for track_id in range(1, 13):
             vx = 0.5 * ((track_id % 5) - 2)
             vy = 0.4 * ((track_id % 3) - 1)
@@ -121,7 +121,7 @@ def _write_synthetic_csv(csv_path: Path) -> None:
                 t = i * 0.1
                 x = track_id + vx * t * 10.0
                 y = vy * t * 10.0
-                f.write(f"test_session,0,{t},{track_id},{x},{y},{vx*10.0},{vy*10.0},0.9\n")
+                f.write(f"test_session,run_0,0,{t},{track_id},{x},{y},{vx*10.0},{vy*10.0},0.9\n")
 
 
 def test_npz_stores_raw_units_not_normalized():
@@ -191,8 +191,60 @@ def test_trajectory_dataset_normalizes_once_and_roundtrips():
         np.testing.assert_allclose(recovered, raw_x0, rtol=1e-4, atol=1e-4)
 
 
+def _write_mixed_subject_csv(csv_path: Path) -> None:
+    """Write a CSV with 4 known subjects plus some trajectories lacking subject_id.
+
+    Rows with an empty subject_id fall back to the synthetic "unknown" group,
+    which subject-held-out mode must reject.
+    """
+    header = "session_id,run_id,sequence_id,timestamp,track_id,x,y,vx,vy,confidence,subject_id\n"
+    with open(csv_path, "w") as f:
+        f.write(header)
+        for track_id in range(1, 13):
+            vx = 0.5 * ((track_id % 5) - 2)
+            vy = 0.4 * ((track_id % 3) - 1)
+            # First 8 tracks map to 4 known subjects; the rest have no subject_id.
+            subject = f"subject_{track_id % 4}" if track_id <= 8 else ""
+            for i in range(50):
+                t = i * 0.1
+                x = track_id + vx * t * 10.0
+                y = vy * t * 10.0
+                f.write(
+                    f"test_session,run_0,0,{t},{track_id},{x},{y},"
+                    f"{vx*10.0},{vy*10.0},0.9,{subject}\n"
+                )
+
+
+def test_subject_mode_rejects_unknown_subject_ids():
+    """Regression (Codex P1): subject mode must reject trajectories with unknown IDs.
+
+    With >= 4 known subjects the count guard passes, but the synthetic "unknown"
+    group merges multiple distinct people into one pseudo-subject that can land
+    in both train and test, breaking the subject-held-out guarantee.
+    """
+    import pytest
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        csv_path = tmpdir / "mixed.csv"
+        _write_mixed_subject_csv(csv_path)
+        output_dir = tmpdir / "output"
+
+        with pytest.raises(ValueError, match="subject_id='unknown'"):
+            build_dataset(
+                input_csv=csv_path,
+                output_dir=output_dir,
+                L=8,
+                H=12,
+                dt=0.125,
+                seed=42,
+                split_mode="subject",
+            )
+
+
 if __name__ == "__main__":
     test_full_pipeline_synthetic()
     test_npz_stores_raw_units_not_normalized()
     test_trajectory_dataset_normalizes_once_and_roundtrips()
+    test_subject_mode_rejects_unknown_subject_ids()
     print("\n✓ Integration tests passed!")

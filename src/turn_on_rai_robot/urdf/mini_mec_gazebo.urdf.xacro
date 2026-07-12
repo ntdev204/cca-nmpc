@@ -1,6 +1,13 @@
 <?xml version="1.0"?>
 <robot name="mini_mec_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <!-- drive: "diff" (default, smoke-test only) or "holonomic".
+       CCA-NMPC control is holonomic Mecanum u=[vx, vy, omega]; the controller
+       publishes cmd_vel.linear.y. libgazebo_ros_diff_drive.so IGNORES linear.y,
+       so control-accuracy claims involving lateral motion require drive:=holonomic
+       (planar-move plugin actuates x, y and yaw). See docs/09_roadmap.md Section 3. -->
+  <xacro:arg name="drive" default="diff" />
+
   <!-- Lightweight simulation model. The vendor CAD URDF uses STL collision
        meshes, which makes Gazebo's contact solver unusably slow. -->
   <link name="base_link">
@@ -66,30 +73,50 @@
 
   <!-- Gazebo plugins for simulation -->
 
-  <!-- P2.1 / review_3: differential-drive approximation for smoke test only.
-       CCA-NMPC control is holonomic Mecanum u=[vx, vy, omega] and the
-       controller publishes cmd_vel.linear.y, but libgazebo_ros_diff_drive.so
-       ignores linear.y. This launch must NOT be used as a Mecanum lateral-
-       motion validation result. Replace with a true mecanum/omni plugin
-       (or a custom 4-wheel cmd_vel mapper) before control-accuracy claims. -->
-  <gazebo>
-    <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
-      <update_rate>50</update_rate>
-      <left_joint>lf_wheel_joint</left_joint>
-      <right_joint>rf_wheel_joint</right_joint>
-      <wheel_separation>0.197</wheel_separation>
-      <wheel_diameter>0.0726</wheel_diameter>
-      <max_wheel_torque>20</max_wheel_torque>
-      <max_wheel_acceleration>1.0</max_wheel_acceleration>
-      <command_topic>cmd_vel</command_topic>
-      <publish_odom>true</publish_odom>
-      <publish_odom_tf>true</publish_odom_tf>
-      <publish_wheel_tf>false</publish_wheel_tf>
-      <odometry_topic>odom_combined</odometry_topic>
-      <odometry_frame>odom_combined</odometry_frame>
-      <robot_base_frame>base_link</robot_base_frame>
-    </plugin>
-  </gazebo>
+  <!-- Differential-drive approximation: SMOKE TEST ONLY.
+       libgazebo_ros_diff_drive.so ignores cmd_vel.linear.y, so this branch must
+       NOT be used for Mecanum lateral-motion validation. Use drive:=holonomic
+       for any control-accuracy claim. -->
+  <xacro:if value="${'$(arg drive)' == 'diff'}">
+    <gazebo>
+      <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
+        <update_rate>50</update_rate>
+        <left_joint>lf_wheel_joint</left_joint>
+        <right_joint>rf_wheel_joint</right_joint>
+        <wheel_separation>0.197</wheel_separation>
+        <wheel_diameter>0.0726</wheel_diameter>
+        <max_wheel_torque>20</max_wheel_torque>
+        <max_wheel_acceleration>1.0</max_wheel_acceleration>
+        <command_topic>cmd_vel</command_topic>
+        <publish_odom>true</publish_odom>
+        <publish_odom_tf>true</publish_odom_tf>
+        <publish_wheel_tf>false</publish_wheel_tf>
+        <odometry_topic>odom_combined</odometry_topic>
+        <odometry_frame>odom_combined</odometry_frame>
+        <robot_base_frame>base_link</robot_base_frame>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+  <!-- Holonomic planar-move plugin: actuates cmd_vel.linear.x, linear.y and
+       angular.z, matching the Mecanum control input u=[vx, vy, omega]. This is
+       the branch valid for CCA-NMPC lateral-motion control results. -->
+  <xacro:if value="${'$(arg drive)' == 'holonomic'}">
+    <gazebo>
+      <plugin name="planar_move" filename="libgazebo_ros_planar_move.so">
+        <update_rate>50</update_rate>
+        <command_topic>cmd_vel</command_topic>
+        <publish_odom>true</publish_odom>
+        <publish_odom_tf>true</publish_odom_tf>
+        <odometry_topic>odom_combined</odometry_topic>
+        <odometry_frame>odom_combined</odometry_frame>
+        <robot_base_frame>base_link</robot_base_frame>
+        <covariance_x>0.0001</covariance_x>
+        <covariance_y>0.0001</covariance_y>
+        <covariance_yaw>0.01</covariance_yaw>
+      </plugin>
+    </gazebo>
+  </xacro:if>
 
   <!-- Lidar sensor plugin -->
   <gazebo reference="laser_link">

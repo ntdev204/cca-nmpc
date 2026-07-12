@@ -6,6 +6,7 @@ build/
 install/
 log/
 review/
+plans/
 
 # Claude worktrees (session-local, not part of the repo)
 .claude/worktrees/

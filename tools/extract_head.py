@@ -14,7 +14,7 @@ if result.returncode == 0:
         f.write(result.stdout)
     print(f"SUCCESS: Wrote {len(result.stdout)} bytes, {result.stdout.count(chr(10))} lines")
     lines = result.stdout.split('\n')
-    print(f"First 45 lines:")
+    print("First 45 lines:")
     for line in lines[:45]:
         print(line)
 else:

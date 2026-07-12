@@ -46,6 +46,7 @@ def export_onnx(
     """Export to ONNX with dynamic batch axis; copy stats alongside."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    model.eval()
     dummy = torch.randn(1, L, model.config.input_size)
     torch.onnx.export(
         model, dummy, str(out_path),

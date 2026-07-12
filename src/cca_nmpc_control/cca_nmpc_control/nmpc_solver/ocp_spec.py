@@ -57,6 +57,19 @@ def build_smooth_cost_stage(du: ca.MX, rd_diag: np.ndarray) -> ca.MX:
     return ca.dot(rd_diag, du * du)
 
 
+def _softplus_hinge(z: ca.MX, beta: float) -> ca.MX:
+    """Smooth approximation of max(0, z) with a continuous derivative.
+
+    softplus_beta(z) = (1/beta) * log(1 + exp(beta*z)) -> max(0, z) as beta->inf.
+    Uses ca.log1p(exp(-|beta z|)) + fmax(beta z, 0) for numerical stability so
+    large beta*z does not overflow exp(). Removes the kink at z=0 that fmax has,
+    giving SQP/IPOPT a smooth Jacobian near the safety-distance boundary.
+    """
+    bz = beta * z
+    stable = ca.fmax(bz, 0.0) + ca.log1p(ca.exp(-ca.fabs(bz)))
+    return stable / beta
+
+
 def build_human_hinge_cost_stage(
     x_robot: ca.MX,
     x_h: float,
@@ -64,9 +77,19 @@ def build_human_hinge_cost_stage(
     phi_j: float,
     d0: float,
     w_h: float,
+    hinge_beta: float = 0.0,
 ) -> ca.MX:
+    """Per-human avoidance cost w_h * phi_j * hinge(d0 - d_j)^2 (Eq. 11.2 / 12).
+
+    hinge_beta <= 0 (default) uses the exact hinge max(0, d0 - d_j), matching
+    docs/01_mathematical_model.md Eq. (11.2) literally. hinge_beta > 0 swaps in a
+    softplus hinge with the same limit but a smooth derivative at the boundary,
+    which can improve SQP/IPOPT robustness near the hinge kink (review P2). The
+    default preserves exact math-model parity; smoothing is strictly opt-in.
+    """
     d_j = build_human_distance(x_robot, x_h, y_h)
-    hinge = ca.fmax(0.0, d0 - d_j)
+    z = d0 - d_j
+    hinge = _softplus_hinge(z, hinge_beta) if hinge_beta > 0.0 else ca.fmax(0.0, z)
     return w_h * phi_j * hinge**2
 
 

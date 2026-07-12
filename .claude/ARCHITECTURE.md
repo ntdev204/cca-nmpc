@@ -17,7 +17,7 @@ AG Kit is a modular system consisting of:
 ## 🏗️ Directory Structure
 
 ```plaintext
-.agents/
+.claude/
 ├── ARCHITECTURE.md          # This file
 ├── agent/                  # 20 Specialist Agents
 ├── skills/                  # 45 Skills (with conditional loading)
@@ -33,28 +33,28 @@ AG Kit is a modular system consisting of:
 
 Specialist AI personas for different domains.
 
-| Agent                    | Focus                      | Skills Used                                              |
-| ------------------------ | -------------------------- | -------------------------------------------------------- |
+| Agent                    | Focus                      | Skills Used                                                                           |
+| ------------------------ | -------------------------- | ------------------------------------------------------------------------------------- |
 | `orchestrator`           | Multi-agent coordination   | parallel-agents, coordinator-mode, memory-system, context-compression, verify-changes |
-| `project-planner`        | Discovery, task planning   | brainstorming, plan-writing, architecture                |
-| `frontend-specialist`    | Web UI/UX                  | frontend-design, nextjs-react-expert, tailwind-patterns |
-| `backend-specialist`     | API, business logic        | api-patterns, nodejs-best-practices, database-design     |
-| `database-architect`     | Schema, SQL                | database-design                                          |
-| `mobile-developer`       | iOS, Android, RN           | mobile-design                                            |
-| `game-developer`         | Game logic, mechanics      | game-development                                         |
-| `devops-engineer`        | CI/CD, Docker              | deployment-procedures, server-management                 |
-| `security-auditor`       | Security compliance        | vulnerability-scanner, red-team-tactics                  |
-| `penetration-tester`     | Offensive security         | red-team-tactics                                         |
-| `test-engineer`          | Testing strategies         | testing-patterns, tdd-workflow, webapp-testing           |
-| `debugger`               | Root cause analysis        | systematic-debugging                                     |
-| `performance-optimizer`  | Speed, Web Vitals          | performance-profiling                                    |
-| `seo-specialist`         | Ranking, visibility        | seo-fundamentals, geo-fundamentals                       |
-| `documentation-writer`   | Manuals, docs              | documentation-templates                                  |
-| `product-manager`        | Requirements, user stories | plan-writing, brainstorming                              |
-| `product-owner`          | Strategy, backlog, MVP     | plan-writing, brainstorming                              |
-| `qa-automation-engineer` | E2E testing, CI pipelines  | webapp-testing, testing-patterns                         |
-| `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist                        |
-| `explorer-agent`         | Codebase analysis          | -                                                        |
+| `project-planner`        | Discovery, task planning   | brainstorming, plan-writing, architecture                                             |
+| `frontend-specialist`    | Web UI/UX                  | frontend-design, nextjs-react-expert, tailwind-patterns                               |
+| `backend-specialist`     | API, business logic        | api-patterns, nodejs-best-practices, database-design                                  |
+| `database-architect`     | Schema, SQL                | database-design                                                                       |
+| `mobile-developer`       | iOS, Android, RN           | mobile-design                                                                         |
+| `game-developer`         | Game logic, mechanics      | game-development                                                                      |
+| `devops-engineer`        | CI/CD, Docker              | deployment-procedures, server-management                                              |
+| `security-auditor`       | Security compliance        | vulnerability-scanner, red-team-tactics                                               |
+| `penetration-tester`     | Offensive security         | red-team-tactics                                                                      |
+| `test-engineer`          | Testing strategies         | testing-patterns, tdd-workflow, webapp-testing                                        |
+| `debugger`               | Root cause analysis        | systematic-debugging                                                                  |
+| `performance-optimizer`  | Speed, Web Vitals          | performance-profiling                                                                 |
+| `seo-specialist`         | Ranking, visibility        | seo-fundamentals, geo-fundamentals                                                    |
+| `documentation-writer`   | Manuals, docs              | documentation-templates                                                               |
+| `product-manager`        | Requirements, user stories | plan-writing, brainstorming                                                           |
+| `product-owner`          | Strategy, backlog, MVP     | plan-writing, brainstorming                                                           |
+| `qa-automation-engineer` | E2E testing, CI pipelines  | webapp-testing, testing-patterns                                                      |
+| `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist                                                     |
+| `explorer-agent`         | Codebase analysis          | -                                                                                     |
 
 ---
 
@@ -73,11 +73,11 @@ Modular knowledge domains that agents can load on-demand based on task context. 
 
 ### Backend & API
 
-| Skill                   | Description                    |
-| ----------------------- | ------------------------------ |
-| `api-patterns`          | REST, GraphQL, tRPC            |
-| `nodejs-best-practices` | Node.js async, modules         |
-| `python-patterns`       | Python standards, FastAPI      |
+| Skill                   | Description                      |
+| ----------------------- | -------------------------------- |
+| `api-patterns`          | REST, GraphQL, tRPC              |
+| `nodejs-best-practices` | Node.js async, modules           |
+| `python-patterns`       | Python standards, FastAPI        |
 | `rust-pro`              | Rust async, systems, type system |
 
 ### Database
@@ -147,16 +147,16 @@ Modular knowledge domains that agents can load on-demand based on task context. 
 
 ### Orchestration & Memory (2026.5.13)
 
-| Skill                     | Description                                                 |
-| ------------------------- | ----------------------------------------------------------- |
-| `coordinator-mode`        | Multi-agent orchestration with parallel workers & synthesis  |
-| `memory-system`           | Persistent cross-session memory with MEMORY.md index        |
-| `context-compression`     | Auto-compress context in long sessions                      |
-| `verify-changes`          | Prove code works by running it, not just inspecting         |
-| `batch-operations`        | Multi-file pattern-based modifications                      |
-| `simplify-code`           | Reduce over-engineered complexity                           |
-| `skillify`                | Auto-create skills from repetitive workflows                |
-| `code-review-graph`       | Token-efficient code review via Tree-sitter AST + MCP       |
+| Skill                 | Description                                                 |
+| --------------------- | ----------------------------------------------------------- |
+| `coordinator-mode`    | Multi-agent orchestration with parallel workers & synthesis |
+| `memory-system`       | Persistent cross-session memory with MEMORY.md index        |
+| `context-compression` | Auto-compress context in long sessions                      |
+| `verify-changes`      | Prove code works by running it, not just inspecting         |
+| `batch-operations`    | Multi-file pattern-based modifications                      |
+| `simplify-code`       | Reduce over-engineered complexity                           |
+| `skillify`            | Auto-create skills from repetitive workflows                |
+| `code-review-graph`   | Token-efficient code review via Tree-sitter AST + MCP       |
 
 ### Other
 
@@ -178,21 +178,21 @@ Modular knowledge domains that agents can load on-demand based on task context. 
 
 Slash command procedures. Invoke with `/command`.
 
-| Command          | Description                                    |
-| ---------------- | ---------------------------------------------- |
-| `/brainstorm`    | Socratic discovery                             |
-| `/coordinate`    | **NEW** Advanced multi-agent coordination      |
-| `/create`        | Create new features                            |
-| `/debug`         | Debug issues                                   |
-| `/deploy`        | Deploy application                             |
-| `/enhance`       | Improve existing code                          |
-| `/orchestrate`   | Multi-agent coordination                       |
-| `/plan`          | Task breakdown                                 |
-| `/preview`       | Preview changes                                |
-| `/remember`      | **NEW** Save to persistent memory              |
-| `/status`        | Check project status                           |
-| `/test`          | Run tests                                      |
-| `/verify`        | **NEW** Prove code works by running it         |
+| Command        | Description                               |
+| -------------- | ----------------------------------------- |
+| `/brainstorm`  | Socratic discovery                        |
+| `/coordinate`  | **NEW** Advanced multi-agent coordination |
+| `/create`      | Create new features                       |
+| `/debug`       | Debug issues                              |
+| `/deploy`      | Deploy application                        |
+| `/enhance`     | Improve existing code                     |
+| `/orchestrate` | Multi-agent coordination                  |
+| `/plan`        | Task breakdown                            |
+| `/preview`     | Preview changes                           |
+| `/remember`    | **NEW** Save to persistent memory         |
+| `/status`      | Check project status                      |
+| `/test`        | Run tests                                 |
+| `/verify`      | **NEW** Prove code works by running it    |
 
 ---
 
@@ -220,16 +220,16 @@ skill-name/
 ---
 name: skill-name
 description: What this skill does
-when_to_use: "When to activate. NOT for X."  # 2026.5.13
+when_to_use: "When to activate. NOT for X." # 2026.5.13
 allowed-tools: Read, Grep, Glob
 ---
 ```
 
 ### Enhanced Skills (with scripts/references)
 
-| Skill               | Files | Coverage                            |
-| ------------------- | ----- | ----------------------------------- |
-| `app-builder`       | 20    | Full-stack scaffolding              |
+| Skill         | Files | Coverage               |
+| ------------- | ----- | ---------------------- |
+| `app-builder` | 20    | Full-stack scaffolding |
 
 ---
 
@@ -280,26 +280,26 @@ For details, see [scripts/README.md](scripts/README.md)
 
 ## 📊 Statistics
 
-| Metric              | Value                             |
-| ------------------- | --------------------------------- |
-| **Total Agents**    | 20 (1 major upgrade in 2026.5.13) |
-| **Total Skills**    | 45 (+7 new in 2026.5.13)          |
-| **Total Workflows** | 13 (+2 new in 2026.5.13)          |
-| **Total Scripts**   | 2 (master) + 16 (skill-level)     |
-| **Coverage**        | ~95% web/mobile + orchestration   |
-| **Token Efficiency**| Reduced via conditional skill loading |
+| Metric               | Value                                 |
+| -------------------- | ------------------------------------- |
+| **Total Agents**     | 20 (1 major upgrade in 2026.5.13)     |
+| **Total Skills**     | 45 (+7 new in 2026.5.13)              |
+| **Total Workflows**  | 13 (+2 new in 2026.5.13)              |
+| **Total Scripts**    | 2 (master) + 16 (skill-level)         |
+| **Coverage**         | ~95% web/mobile + orchestration       |
+| **Token Efficiency** | Reduced via conditional skill loading |
 
 ---
 
 ## 🔗 Quick Reference
 
-| Need     | Agent                 | Skills                                |
-| -------- | --------------------- | ------------------------------------- |
+| Need     | Agent                 | Skills                               |
+| -------- | --------------------- | ------------------------------------ |
 | Web App  | `frontend-specialist` | nextjs-react-expert, frontend-design |
-| API      | `backend-specialist`  | api-patterns, nodejs-best-practices   |
-| Mobile   | `mobile-developer`    | mobile-design                         |
-| Database | `database-architect`  | database-design                       |
-| Security | `security-auditor`    | vulnerability-scanner                 |
-| Testing  | `test-engineer`       | testing-patterns, webapp-testing      |
-| Debug    | `debugger`            | systematic-debugging                  |
-| Plan     | `project-planner`     | brainstorming, plan-writing           |
+| API      | `backend-specialist`  | api-patterns, nodejs-best-practices  |
+| Mobile   | `mobile-developer`    | mobile-design                        |
+| Database | `database-architect`  | database-design                      |
+| Security | `security-auditor`    | vulnerability-scanner                |
+| Testing  | `test-engineer`       | testing-patterns, webapp-testing     |
+| Debug    | `debugger`            | systematic-debugging                 |
+| Plan     | `project-planner`     | brainstorming, plan-writing          |

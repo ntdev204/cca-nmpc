@@ -20,7 +20,7 @@ from .normalize import (
 )
 from .resample import resample_trajectory
 from .schema import TrajectoryKey
-from .split import split_by_trajectory
+from .split import split_by_trajectory, split_by_group
 from .windowing import extract_windows
 
 DATASET_VERSION = "lstm_dataset_v1"
@@ -43,6 +43,7 @@ def build_dataset(
     dt: float = 0.125,
     seed: int = 42,
     velocity_rederive_threshold: float = 0.5,
+    split_mode: str = "trajectory",
 ) -> Dict:
     """Build train/val/test datasets from raw CSV.
 
@@ -54,6 +55,9 @@ def build_dataset(
         dt: Target resampling period (seconds).
         seed: Random seed for deterministic splitting.
         velocity_rederive_threshold: Gap threshold for velocity re-derivation (s).
+        split_mode: "trajectory" (default) or "subject". "trajectory" prevents
+            window leakage; "subject" holds out entire subjects for unseen-human
+            generalization claims.
 
     Returns:
         Manifest dict with file paths and metadata.
@@ -97,11 +101,44 @@ def build_dataset(
     total_windows = sum(len(v[0]) for v in track_windows.values())
     print(f"      Created {total_windows} windows from {len(track_windows)} trajectories.")
 
-    # 4. Split by trajectory (no leakage)
-    print(f"[4/6] Splitting by trajectory (70/15/15, seed={seed})...")
-    (train_in, train_tgt), (val_in, val_tgt), (test_in, test_tgt) = split_by_trajectory(
-        track_windows, seed=seed
-    )
+    # 4. Split by trajectory or subject
+    if split_mode == "trajectory":
+        print(f"[4/6] Splitting by trajectory (70/15/15, seed={seed})...")
+        (train_in, train_tgt), (val_in, val_tgt), (test_in, test_tgt) = split_by_trajectory(
+            track_windows, seed=seed
+        )
+    elif split_mode == "subject":
+        print(f"[4/6] Splitting by subject (70/15/15, seed={seed})...")
+        group_of = {
+            key: records[0].subject_id
+            for key, records in trajectories.items()
+            if key in track_windows
+        }
+        # Reject unidentified trajectories: the synthetic "unknown" group merges
+        # multiple distinct people into one pseudo-subject that can land in
+        # train AND test, silently breaking the subject-held-out guarantee.
+        unknown_keys = [k for k, s in group_of.items() if s == "unknown"]
+        if unknown_keys:
+            raise ValueError(
+                f"--split-mode subject requires every trajectory to have a known "
+                f"subject_id; found {len(unknown_keys)} trajectory(ies) with "
+                f"subject_id='unknown'. Unidentified subjects cannot be held out "
+                "and would invalidate the split. Set subject_id in CSV for all "
+                "trajectories or use --split-mode trajectory."
+            )
+        known = set(group_of.values())
+        if len(known) < 4:
+            raise ValueError(
+                f"--split-mode subject requires at least 4 distinct subject_id "
+                f"values for non-empty train/val/test (70/15/15 floor allocation), "
+                f"found: {sorted(known)}. "
+                "Set subject_id in CSV or use --split-mode trajectory."
+            )
+        (train_in, train_tgt), (val_in, val_tgt), (test_in, test_tgt) = split_by_group(
+            track_windows, group_of, seed=seed
+        )
+    else:
+        raise ValueError(f"split_mode must be 'trajectory' or 'subject', got '{split_mode}'")
     print(f"      Train: {len(train_in)} windows")
     print(f"      Val:   {len(val_in)} windows")
     print(f"      Test:  {len(test_in)} windows")
@@ -133,6 +170,11 @@ def build_dataset(
         "H": H,
         "dt": dt,
         "seed": seed,
+        "split_mode": split_mode,
+        # Records are grouped and split by this composite identity. run_id is
+        # part of the key so tracks from different physical runs that reuse a
+        # reset tracker id + sequence_id are never merged (P1 dataset identity).
+        "trajectory_key": ["session_id", "run_id", "sequence_id", "track_id"],
         "splits": {},
     }
 
@@ -199,6 +241,13 @@ def main() -> int:
         default=0.5,
         help="Gap threshold for velocity re-derivation (seconds).",
     )
+    parser.add_argument(
+        "--split-mode",
+        type=str,
+        default="trajectory",
+        choices=["trajectory", "subject"],
+        help="Split mode: 'trajectory' (default, no window leakage) or 'subject' (hold out entire subjects).",
+    )
 
     args = parser.parse_args()
 
@@ -211,6 +260,7 @@ def main() -> int:
             dt=args.dt,
             seed=args.seed,
             velocity_rederive_threshold=args.velocity_rederive_threshold,
+            split_mode=args.split_mode,
         )
         print("\n=== Build Complete ===")
         print(f"Version: {manifest['version']}")

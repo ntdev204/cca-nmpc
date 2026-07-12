@@ -48,6 +48,37 @@ These are kept separate because they serve different purposes: the LSTM dataset 
 - Stored as `.npz` (numpy) or `.parquet` per split (`train.parquet`, `val.parquet`, `test.parquet`), plus a `normalization_stats.json` with per-channel mean/std.
 - Raw un-windowed trajectories additionally kept as rosbag2 (`.db3`) for traceability back to the original sensor run.
 
+### 2.6 Trajectory identity, split policy, and label provenance
+
+**Trajectory identity key.** Records are grouped and split by the composite key
+`(session_id, run_id, sequence_id, track_id)`. `run_id` is part of the key
+because tracker IDs reset between physical runs: without it, a `run_0` human and
+a `run_1` human that both received `track_id=5` at `sequence_id=0` would be
+merged into one impossible trajectory, injecting teleport jumps into training
+and leaking run-specific behaviour across splits. The builder records this key
+in its manifest (`trajectory_key`).
+
+**Split policy.**
+- *Trajectory-level split* (default): every trajectory key goes to exactly one
+  split → no window leakage. Supports "seen-subject trajectory prediction".
+- *Subject-held-out split* (optional, `split_by_group` on `subject_id`): whole
+  subjects are held out → supports the stronger "generalizes to new human
+  walking styles" claim. `subject_id`/`scenario_id`/`environment_id` are
+  retained through `TrajectoryRecord` for this and for scenario stratification.
+  For the paper, report both splits where subject labels exist.
+
+**Label provenance (pseudo-ground-truth).** Dataset 01 targets are tracker
+observations (YOLO → depth → Kalman), i.e. *pseudo-ground-truth*, not an
+independent reference. The LSTM can learn detector/tracker bias, and offline
+ADE/FDE against these targets can **understate** true human-position error
+because predictions and targets come from the same perception chain. Therefore:
+- ADE/FDE on tracker pseudo-labels is reported as *training/predictor fidelity*,
+  labelled `label_source = "tracker_pseudo_gt"` (see `tools/lstm_training/evaluate.py`).
+- Absolute accuracy claims require an independently annotated subset (mocap,
+  calibrated overhead camera, AprilTag markers, or a measured floor path),
+  reported separately as `label_source = "independent_reference"`
+  (deferred, tracked in docs/09_roadmap.md Section 4).
+
 ---
 
 ## 3. Context-Calibration Dataset (Section 8.1 of Mathematical Model)

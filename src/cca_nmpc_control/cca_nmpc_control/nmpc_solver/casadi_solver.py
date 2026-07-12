@@ -32,6 +32,9 @@ class CasadiSolver(SolverInterface):
         self._w_h = 3.0
         self._w_slack = 50.0
         self._d0 = 3.0
+        # <=0 keeps the exact hinge (math-model parity); >0 enables softplus
+        # smoothing of the human hinge for smoother SQP/IPOPT derivatives.
+        self._hinge_beta = 0.0
         self._w_obstacle = 2.0
         self._obstacle_sigma = 0.35
         self._max_obstacles = 64
@@ -59,6 +62,7 @@ class CasadiSolver(SolverInterface):
         self._w_h = float(params.get("w_h", self._w_h))
         self._w_slack = float(params.get("w_slack", self._w_slack))
         self._d0 = float(params.get("d0", self._d0))
+        self._hinge_beta = float(params.get("hinge_beta", self._hinge_beta))
         self._w_obstacle = float(params.get("w_obstacle", self._w_obstacle))
         self._obstacle_sigma = float(params.get("obstacle_sigma", self._obstacle_sigma))
         self._max_obstacles = int(params.get("max_obstacle_samples", self._max_obstacles))
@@ -100,8 +104,14 @@ class CasadiSolver(SolverInterface):
                 )
             for j in range(M):
                 J += ocp_spec.build_human_hinge_cost_stage(
-                    X[:, k], P_hx[k, j], P_hy[k, j], P_phi[j], self._d0, self._w_h
+                    X[:, k], P_hx[k, j], P_hy[k, j], P_phi[j], self._d0, self._w_h,
+                    hinge_beta=self._hinge_beta,
                 )
+            # Obstacle handling is a SOFT Gaussian cost over sampled occupied
+            # costmap cells, NOT a hard collision constraint (docs/08 Section 14).
+            # It provides an avoidance gradient but gives no hard safety
+            # guarantee; a signed-distance hard constraint would be required to
+            # claim guaranteed obstacle safety.
             for j in range(self._max_obstacles):
                 squared_distance = (
                     (X[0, k] - P_obs[0, j]) ** 2

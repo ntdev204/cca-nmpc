@@ -2,8 +2,20 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _sha256(path: Path) -> str:
+    """Return the SHA256 hex digest of a file for provenance tracking."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def main() -> int:
@@ -17,8 +29,12 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("models/yolo26m_human.engine"),
-        help="Output path for .engine file",
+        default=None,
+        help=(
+            "Output path for .engine file. Default: models/<weights-stem>.engine, "
+            "derived from the weights filename so the engine name never implies a "
+            "detector version that does not match the supplied weights."
+        ),
     )
     parser.add_argument(
         "--imgsz",
@@ -48,6 +64,11 @@ def main() -> int:
     if not args.weights.exists():
         print(f"ERROR: weights file not found: {args.weights}", file=sys.stderr)
         return 1
+
+    # Derive the engine name from the weights filename when not given explicitly,
+    # so a YOLOv8/YOLO11 checkpoint never lands in a file named like YOLO26m.
+    if args.output is None:
+        args.output = Path("models") / f"{args.weights.stem}.engine"
 
     try:
         from ultralytics import YOLO
@@ -94,10 +115,48 @@ def main() -> int:
         print(f"WARNING: Expected engine not found at {args.output}", file=sys.stderr)
         return 1
 
+    _write_provenance(args)
+
     print("\nEngine build complete.")
     print("Use this path in cca_nmpc_params.yaml:")
     print(f"  yolo_engine_path: \"{args.output}\"")
     return 0
+
+
+def _write_provenance(args) -> None:
+    """Write a <engine>.metadata.json sidecar recording detector provenance.
+
+    Reproducibility: the engine file itself carries no reliable record of which
+    weights/version produced it, so the paper cannot state the detector version
+    from the engine alone. This sidecar pins weights path + SHA256, Ultralytics
+    version, imgsz, precision, batch, device, and build time next to the engine.
+    """
+    try:
+        import ultralytics
+        ultralytics_version = ultralytics.__version__
+    except Exception:
+        ultralytics_version = "unknown"
+    try:
+        import tensorrt as trt
+        trt_version = trt.__version__
+    except Exception:
+        trt_version = "unknown"
+
+    metadata = {
+        "engine": str(args.output),
+        "weights": str(args.weights),
+        "weights_sha256": _sha256(args.weights),
+        "ultralytics_version": ultralytics_version,
+        "tensorrt_version": trt_version,
+        "imgsz": args.imgsz,
+        "batch": args.batch,
+        "precision": "fp16" if args.fp16 else "fp32",
+        "device": args.device,
+        "built_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    sidecar = args.output.with_suffix(".metadata.json")
+    sidecar.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    print(f"Wrote provenance metadata: {sidecar}")
 
 
 if __name__ == "__main__":
