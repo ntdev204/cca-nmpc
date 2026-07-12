@@ -28,7 +28,7 @@
 ┌─────────────────────┐
 │  context_node        │  Continuous context estimator (Eq. 8.1–8.3)
 │  (Python, rclpy)     │  subscribes: /human_states, /human_predictions,
-│                       │               /human_pred_uncertainty, /robot_odom
+│                       │               /human_pred_uncertainty, /odom_combined
 │                       │  publishes: /context_index (per-human φ_j + aggregate φ)
 └──────────┬───────────┘
            │
@@ -43,7 +43,7 @@
 ┌─────────────────────┐
 │  nmpc_controller_node│  CCA-NMPC solver (CasADi/IPOPT reference; acados deferred)
 │  (Python, rclpy)     │  subscribes: /adaptive_params, /human_predictions,
-│                       │               /robot_odom, /local_costmap
+│                       │               /odom_combined, /local_costmap
 │                       │  publishes: /cmd_vel, /nmpc_diagnostics
 └──────────────────────┘
 ```

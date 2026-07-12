@@ -99,7 +99,7 @@ class NmpcControllerNode(Node):
                                  self._on_human_states, 10)
         self.create_subscription(ContextIndexArray, '/context_index',
                                  self._on_context, 10)
-        self.create_subscription(Odometry, '/odom', self._on_odom, 10)
+        self.create_subscription(Odometry, self._odom_topic, self._on_odom, 10)
         self.create_subscription(PoseStamped, '/goal_pose', self._on_goal, 10)
         self.create_subscription(Path, '/reference_path', self._on_reference, 10)
         self.create_subscription(Costmap, '/local_costmap/costmap', self._on_costmap, 10)
@@ -137,6 +137,7 @@ class NmpcControllerNode(Node):
         d('require_costmap', True)
         d('require_reference_path', True)
         d('allow_empty_humans', False)
+        d('odom_topic', '/odom_combined')
         g = self.get_parameter
         self._backend = g('solver_backend').value
         self._N = int(g('horizon_N').value)
@@ -164,6 +165,7 @@ class NmpcControllerNode(Node):
         self._require_costmap = bool(g('require_costmap').value)
         self._require_reference_path = bool(g('require_reference_path').value)
         self._allow_empty_humans = bool(g('allow_empty_humans').value)
+        self._odom_topic = str(g('odom_topic').value)
 
     def _build_solver(self):
         if self._backend == 'acados':

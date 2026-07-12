@@ -94,11 +94,11 @@ The shift-and-append warm start (5.1) assumes the previous solution is still a _
 goal changed          -> reset()   (reference trajectory discontinuity invalidates J_tracking's warm start)
 map relocalization     -> reset()   (e.g. AMCL jump; robot's belief of X_r changed discontinuously)
 robot lifted            -> reset()   (wheel odometry no longer reflects true motion; state estimate is meaningless)
-odom jump               -> reset()   (discontinuity in /odom beyond a configurable threshold, distinct from
+odom jump               -> reset()   (discontinuity in /odom_combined beyond a configurable threshold, distinct from
                                        normal relocalization — e.g. an odometry fault)
 ```
 
-Each of these is detected outside the solver itself (by `nmpc_controller_node`, comparing consecutive `/odom` or goal messages against a threshold, or subscribing to a relocalization event from the localization stack) and triggers an explicit `reset()` call before the next `solve()`. Making this list explicit here — rather than leaving it to be inferred at implementation time — is deliberate: an implementer who is not told this list will likely only discover "goal changed" and miss the other three until a real failure exposes them.
+Each of these is detected outside the solver itself (by `nmpc_controller_node`, comparing consecutive `/odom_combined` or goal messages against a threshold, or subscribing to a relocalization event from the localization stack) and triggers an explicit `reset()` call before the next `solve()`. Making this list explicit here — rather than leaving it to be inferred at implementation time — is deliberate: an implementer who is not told this list will likely only discover "goal changed" and miss the other three until a real failure exposes them.
 
 ---
 
@@ -375,7 +375,7 @@ Raw Nav2 costmaps are not differentiable (piecewise-constant occupancy grids, or
 2. **Dummy-human placeholder convention** (Section 3.3) needs a documented constant (e.g. `d_j = 999.0`, `phi_j = 0.0`) so unused constraint slots don't accidentally get logged as a real near-miss in diagnostics.
 3. **CasADi/acados parity testing**: if and when acados becomes available on the target platform (Section 2), both backends should be run on identical logged scenarios and their trajectories, costs, and `SolverDiagnostics` compared numerically before trusting the acados output, to catch formulation drift introduced during implementation (e.g. a slack penalty accidentally doubled, a sign flipped in an External Cost term). This is the primary justification for retaining the CasADi reference backend (Section 2) even after acados becomes feasible.
 4. **`timeout_hold_cycles` value** (Section 9) needs to be chosen and justified — likely a small number of cycles (e.g. 2–3 at 20 Hz, i.e. ~100–150 ms) but should be tied to how fast a nearby human can materially change position, not chosen arbitrarily.
-5. **Odom-jump threshold** (Section 5.2) needs a concrete numerical value (e.g. position discontinuity beyond N cm or heading beyond M degrees between consecutive `/odom` messages) — currently only the trigger category is specified, not the detection threshold.
+5. **Odom-jump threshold** (Section 5.2) needs a concrete numerical value (e.g. position discontinuity beyond N cm or heading beyond M degrees between consecutive `/odom_combined` messages) — currently only the trigger category is specified, not the detection threshold.
 
 ---
 

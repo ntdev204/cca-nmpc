@@ -19,6 +19,7 @@ nmpc_controller_node:
     max_humans_in_solver: 6      # fixed per-human constraint slots (Eq. 12.3)
     f_lstm_hz: 8.0               # LSTM prediction frequency [Hz]; interpolation to NMPC grid (Section 13.1)
     input_timeout_sec: 0.5
+    odom_topic: /odom_combined     # robot stack EKF/base odometry output
     max_obstacle_samples: 64
     obstacle_sigma: 0.35
     solver_max_cpu_time_sec: 0.045

@@ -115,7 +115,7 @@ def generate_launch_description():
         condition=IfCondition(flagship_mec_bs_robot),
         actions=[
         generate_robot_node('flagship_mec_bs_robot.urdf','flagship_mec_bs'),
-        generate_static_transform_publisher_node(['0.24699', '0.00002', '0.24466'], ['0', '0', '0'], 'base_link', 'laser'),
+        generate_static_transform_publisher_node(['0.24699', '0.00002', '0.24466'], ['0', '0', '0'], 'base_footprint', 'laser'),
         generate_static_transform_publisher_node(['0.29879', '0.00024', '0.1722'], ['0', '0', '0'], 'base_footprint', 'camera_link'),    
     ]) 
     flagship_mec_dl_robot_ = GroupAction(

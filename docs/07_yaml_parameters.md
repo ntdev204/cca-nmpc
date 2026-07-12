@@ -41,7 +41,9 @@ prediction_node:
     max_track_age_sec: 1.0
 
 context_node:
+  # Uses the odometry topic already provided by the robot EKF/base stack.
   ros__parameters:
+    odom_topic: "/odom_combined"
     d0: 3.0 # d_0 in Eq. 8.2 [m]
     v_max_ref: 1.5 # v_max normalizer in Eq. 8.2 [m/s]
     epsilon: 1.0e-3 # epsilon in Eqs. 7.4, 7.5
@@ -75,7 +77,9 @@ adaptive_param_node:
     Qh_diag: [8.0, 8.0, 3.0] # Q_h in Eq. 10.3
 
 nmpc_controller_node:
+  # Uses the same odometry source as context_node.
   ros__parameters:
+    odom_topic: "/odom_combined"
     solver_backend: "casadi" # or "acados" (requires target platform acados toolchain)
     horizon_N: 20
     dt: 0.05 # control period [s] -> f_NMPC = 20 Hz
@@ -94,7 +98,7 @@ nmpc_controller_node:
     solver_max_cpu_time_sec: 0.045 # backend-enforced deadline below dt=0.05
     # Real-time fallback / warm-start invalidation (Solver Design doc, Sections 5.2, 9)
     timeout_hold_cycles: 3 # max consecutive failed/late solves to hold previous control before safe-stop (Section 9)
-    odom_jump_pos_thresh_m: 0.30 # position discontinuity between consecutive /odom beyond this -> reset() (Section 5.2)
+    odom_jump_pos_thresh_m: 0.30 # position discontinuity between consecutive /odom_combined beyond this -> reset() (Section 5.2)
     odom_jump_yaw_thresh_rad: 0.35 # heading discontinuity beyond this -> reset() (Section 5.2)
     safe_stop_decel_limit: 1.0 # max deceleration [m/s^2] for the safe-stop ramp (Section 9)
     # Input-freshness mode (review_3 / P2.3).

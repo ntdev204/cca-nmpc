@@ -40,6 +40,7 @@ context_node:
     dwell_time.T_dwell_cycles: 4
     fallback_phi_on_dropout: 1.0
     input_timeout_sec: 0.5
+    odom_topic: /odom_combined
 adaptive_param_node:
   ros__parameters:
     d_safe0: 0.6
@@ -82,3 +83,4 @@ nmpc_controller_node:
     require_costmap: true
     require_reference_path: true
     allow_empty_humans: false
+    odom_topic: /odom_combined

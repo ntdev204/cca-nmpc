@@ -48,7 +48,7 @@ class ContextNode(Node):
         self._sub_unc = self.create_subscription(
             HumanUncertaintyArray, '/human_pred_uncertainty', self._on_uncertainty, 10)
         self._sub_odom = self.create_subscription(
-            Odometry, '/odom', self._on_odom, 10)
+            Odometry, self._odom_topic, self._on_odom, 10)
 
         self._pub = self.create_publisher(ContextIndexArray, '/context_index', 10)
         self._timer = self.create_timer(1.0 / self._rate_hz, self._on_cycle)
@@ -69,6 +69,7 @@ class ContextNode(Node):
         self.declare_parameter('fallback_phi_on_dropout', 1.0)
         self.declare_parameter('input_timeout_sec', 0.5)
         self.declare_parameter('rate_hz', 20.0)
+        self.declare_parameter('odom_topic', '/odom_combined')
 
         gp = self.get_parameter
         self._d0 = gp('d0').value
@@ -87,6 +88,7 @@ class ContextNode(Node):
         self._fallback_phi = gp('fallback_phi_on_dropout').value
         self._timeout = gp('input_timeout_sec').value
         self._rate_hz = gp('rate_hz').value
+        self._odom_topic = str(gp('odom_topic').value)
 
     def _on_states(self, msg: HumanStateArray) -> None:
         self._latest_states = msg

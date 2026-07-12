@@ -21,3 +21,4 @@ context_node:
       T_dwell_cycles: 4     # Eq. 12.7 minimum cycles between phi_j_used updates
     fallback_phi_on_dropout: 1.0   # conservative default (Architecture Section 4)
     input_timeout_sec: 0.5         # dropout if no fresh states/predictions within this
+    odom_topic: /odom_combined     # robot stack EKF/base odometry output
